@@ -123,6 +123,8 @@ export interface LoomState {
 
   // ── add-agent panel ──
   adding: boolean;
+  /** True while an NL flow generation (flow.generate) is in flight. */
+  generating: boolean;
   draft: AddAgentDraft | null;
   advOpen: boolean;
   typeQuery: string;
@@ -145,6 +147,8 @@ export interface LoomState {
   kill: () => void;
   runNow: (triggerNodeId?: NodeId) => void;
   createFlow: (name: string) => void;
+  /** NL authoring: generate a full flow from a description (flow.generate). */
+  generateFlow: (prompt: string) => void;
   deleteFlow: (flowId: FlowId) => void;
   saveSpec: () => void;
   setWorkDir: (workDir: string) => void;
@@ -398,6 +402,7 @@ export const useLoomStore = create<LoomState>((set, get) => ({
   running: false,
 
   adding: false,
+  generating: false,
   draft: null,
   advOpen: false,
   typeQuery: "",
@@ -518,11 +523,12 @@ export const useLoomStore = create<LoomState>((set, get) => ({
         break;
       }
       case "ack": {
-        if (!msg.ok) set({ lastError: msg.error ?? "command failed" });
+        // Any ack settles an in-flight generation (success or failure).
+        set({ generating: false, ...(!msg.ok ? { lastError: msg.error ?? "command failed" } : {}) });
         break;
       }
       case "error": {
-        set({ lastError: `${msg.code}: ${msg.message}` });
+        set({ generating: false, lastError: `${msg.code}: ${msg.message}` });
         break;
       }
     }
@@ -558,6 +564,12 @@ export const useLoomStore = create<LoomState>((set, get) => ({
   },
   createFlow: (name) => {
     get().sendCommand({ t: "flow.create", cmdId: makeCmdId(), name });
+  },
+  generateFlow: (prompt) => {
+    const text = prompt.trim();
+    if (!text) return;
+    set({ generating: true });
+    get().sendCommand({ t: "flow.generate", cmdId: makeCmdId(), prompt: text });
   },
   deleteFlow: (flowId) => {
     const state = get();

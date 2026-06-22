@@ -1,4 +1,4 @@
-import type { Flow, AgentNode, Edge, Run, Terminal, FlowSummary } from "@loom/shared";
+import type { Flow, AgentNode, Edge, Run, Terminal, FlowSummary, FlowState } from "@loom/shared";
 import type { LoomState, RunMode, Theme } from "./store";
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -36,6 +36,9 @@ export interface TopBarProps {
   cycle: number;
   mode: RunMode;
   running: boolean;
+  /** The selected flow's projected state — drives the honest status label
+   *  (an armed-but-idle flow must NOT read as "PAUSADO"). */
+  flowState?: FlowState;
   theme: Theme;
   connection: LoomState["connection"];
   /** false → no flow selected, so the run button renders disabled. */

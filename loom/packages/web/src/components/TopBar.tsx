@@ -54,7 +54,7 @@ const TAB_OFF: CSSProperties = {
 };
 
 export function TopBar(props: TopBarProps) {
-  const { flowName, cycle, mode, running, theme, connection, canRun, onSetMode, onTogglePlay, onToggleTheme, onSaveSpec } = props;
+  const { flowName, cycle, mode, running, flowState, theme, connection, canRun, onSetMode, onTogglePlay, onToggleTheme, onSaveSpec } = props;
 
   const edit = mode === "edit";
   const isDark = theme === "dark";
@@ -83,7 +83,22 @@ export function TopBar(props: TopBarProps) {
   const statusBorder = running ? alpha(ACCENT, 0.25) : "var(--line)";
   const statusDot = running ? ACCENT : "var(--muted)";
   const statusText = running ? alpha(ACCENT, 0.95) : "#7a8c86";
-  const statusLabel = running ? "EM EXECUÇÃO" : "PAUSADO";
+  // HONEST label: reflect the flow's real state. The old binary (running ?
+  // "EM EXECUÇÃO" : "PAUSADO") lied — an armed-but-idle flow firing on an
+  // interval read as "PAUSADO" while it kept spending every cycle.
+  const STATE_LABEL: Record<string, string> = {
+    rodando: "EM EXECUÇÃO",
+    agendado: "AGENDADO",
+    aguardando: "AGUARDANDO",
+    pausado: "PAUSADO",
+    ocioso: "OCIOSO",
+    rascunho: "RASCUNHO",
+  };
+  const statusLabel = flowState
+    ? (STATE_LABEL[flowState] ?? flowState.toUpperCase())
+    : running
+      ? "EM EXECUÇÃO"
+      : "OCIOSO";
 
   return (
     <div

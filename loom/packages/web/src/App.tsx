@@ -241,6 +241,7 @@ function AppShell() {
           cycle={cycle}
           mode={mode}
           running={running}
+          flowState={flow?.state}
           theme={theme}
           connection={connection}
           canRun={!!selectedFlowId}

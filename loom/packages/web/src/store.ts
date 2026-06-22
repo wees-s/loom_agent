@@ -148,6 +148,10 @@ export interface LoomState {
   deleteFlow: (flowId: FlowId) => void;
   saveSpec: () => void;
   setWorkDir: (workDir: string) => void;
+  /** Human-in-the-loop: resume a flow paused at a cycle checkpoint. */
+  continue: () => void;
+  /** Toggle "review each cycle" for the selected flow (persisted via spec.save). */
+  setReviewEachCycle: (on: boolean) => void;
   setTrigger: (nodeId: NodeId, trigger: TriggerConfig) => void;
   openTerminal: (terminal: string) => void;
   selectTerminal: (terminalId: string | null) => void;
@@ -590,6 +594,7 @@ export const useLoomStore = create<LoomState>((set, get) => ({
       id: flow.id,
       name: flow.name,
       ...(flow.workDir !== undefined ? { workDir: flow.workDir } : {}),
+      ...(flow.reviewEachCycle !== undefined ? { reviewEachCycle: flow.reviewEachCycle } : {}),
       nodes: flow.nodes,
       edges: flow.edges,
     };
@@ -604,6 +609,20 @@ export const useLoomStore = create<LoomState>((set, get) => ({
     // optimistic local patch, then persist via spec.save (which carries workDir)
     const nextFlow = { ...flow, workDir: trimmed === "" ? undefined : trimmed };
     set({ flowsById: { ...flowsById, [selectedFlowId]: nextFlow } });
+    get().saveSpec();
+  },
+  continue: () => {
+    const { selectedFlowId, sendCommand } = get();
+    if (!selectedFlowId) return;
+    sendCommand({ t: "flow.continue", cmdId: makeCmdId(), flowId: selectedFlowId });
+  },
+  setReviewEachCycle: (on) => {
+    const { selectedFlowId, flowsById } = get();
+    if (!selectedFlowId) return;
+    const flow = flowsById[selectedFlowId];
+    if (!flow) return;
+    // optimistic local patch, then persist via spec.save (which carries the flag)
+    set({ flowsById: { ...flowsById, [selectedFlowId]: { ...flow, reviewEachCycle: on } } });
     get().saveSpec();
   },
   setTrigger: (nodeId, trigger) => {

@@ -30,4 +30,16 @@ describe("<Storyline/>", () => {
     render(<Storyline />);
     expect(screen.getByText(/Nada rolando ainda/i)).toBeInTheDocument();
   });
+
+  it("shows the approval banner + Continuar button when the flow is aguardando", () => {
+    useLoomStore.setState({
+      storyline: lines,
+      storylineOpen: true,
+      flowsById: { f1: { id: "f1", state: "aguardando" } as never },
+      selectedFlowId: "f1" as never,
+    });
+    render(<Storyline />);
+    expect(screen.getByText(/aguardando sua aprovação/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /continuar/i })).toBeInTheDocument();
+  });
 });

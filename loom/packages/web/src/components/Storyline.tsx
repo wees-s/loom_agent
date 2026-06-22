@@ -97,6 +97,12 @@ function Line({ line }: { line: NarrationLine }) {
 export function Storyline() {
   const storyline = useLoomStore(selectStoryline);
   const open = useLoomStore((s) => s.storylineOpen);
+  const continueFlow = useLoomStore((s) => s.continue);
+  const stopFlow = useLoomStore((s) => s.kill);
+  const awaiting = useLoomStore((s) => {
+    const f = s.selectedFlowId ? s.flowsById[s.selectedFlowId] : undefined;
+    return f?.state === "aguardando";
+  });
 
   // Group by cycle, newest cycle first (lines within a cycle stay chronological).
   const groups = useMemo(() => {
@@ -114,6 +120,15 @@ export function Storyline() {
   return (
     <div style={PANEL_STYLE} data-storyline>
       <div style={HEADER_STYLE}>Storyline</div>
+      {awaiting && (
+        <div data-approval-banner style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8, background: "oklch(0.95 0.05 80 / 0.5)", borderBottom: "1px solid var(--line2)" }}>
+          <span style={{ fontSize: 12.5, color: "var(--text)" }}>Ciclo concluído — aguardando sua aprovação para continuar.</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => continueFlow()} style={{ flex: 1, padding: "7px 10px", border: "none", borderRadius: 9, background: "oklch(0.62 0.14 160)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Continuar ▶</button>
+            <button type="button" onClick={() => stopFlow()} style={{ flex: 1, padding: "7px 10px", border: "1px solid var(--line2)", borderRadius: 9, background: "transparent", color: "var(--text2)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Parar ■</button>
+          </div>
+        </div>
+      )}
       <div style={FEED_STYLE}>
         {storyline.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 12.5, padding: "20px 4px", lineHeight: 1.5 }}>

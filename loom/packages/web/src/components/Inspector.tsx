@@ -848,6 +848,7 @@ function FlowInfoView({ flow }: InspectorProps) {
   const selectedFlowId = useLoomStore((s) => s.selectedFlowId);
   const deleteFlow = useLoomStore((s) => s.deleteFlow);
   const setWorkDir = useLoomStore((s) => s.setWorkDir);
+  const setReviewEachCycle = useLoomStore((s) => s.setReviewEachCycle);
 
   if (!flow) return null;
 
@@ -992,6 +993,17 @@ function FlowInfoView({ flow }: InspectorProps) {
           Selecione um agente ou conexão no canvas para editar os detalhes. ESC ou clique no fundo
           volta para esta visão do fluxo.
         </div>
+
+        {/* Revisar cada ciclo (human-in-the-loop checkpoint) — pause between cycles. */}
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--text2)", cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            data-review-toggle
+            checked={flow.reviewEachCycle === true}
+            onChange={(e) => setReviewEachCycle(e.target.checked)}
+          />
+          Revisar cada ciclo (pausar e pedir aprovação)
+        </label>
 
         {/* Pasta de trabalho (workDir) — agents in this flow run INSIDE this real folder. */}
         <div>

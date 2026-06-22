@@ -1,6 +1,16 @@
 // =============================================================================
 // streamParser.ts [streamParser] — PURE NDJSON adapter for claude stream-json.
 //
+// ⚠️ LEGACY (mostly unused on the real path). The terminal-native RealRunner uses
+// default TEXT output and does NOT parse stream-json, so the full NDJSON parser
+// below (createStreamParser/parseLine/StreamEvent handling) is currently dead on
+// the production path — only the small cost helpers `emptyUsage`/`costFromUsage`
+// are still consumed (by the FakeRunner). `auth.ts` has its own inline reader.
+// Kept intact (not deleted) because it is the natural building block for the
+// planned metering fix: parse the real session's final cost/usage and feed
+// guard.meterToken to re-activate the per-flow accumulation + live abort. See
+// README "Safety model" follow-up and review_loom.md §7.1 / §7.2.
+//
 // No side effects. Consumes raw NDJSON lines and surfaces structured StreamEvents
 // the runner turns into LoomEvents. Computes costUsd from MODEL_REGISTRY pricing
 // when the CLI omits total_cost_usd. Unit-testable on captured fixtures.

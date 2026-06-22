@@ -18,6 +18,13 @@ export const PORTS = {
 } as const;
 
 // Default per-flow ceilings applied when a spec omits an explicit budget.
+//
+// COST-BOUND REALITY (terminal mode): there is no live token meter, so the bounds
+// that actually cap LIFETIME cost are maxCyclesPerArm + maxUsdPerRun/maxTokensPerRun
+// (both enforced pre-spend via worstCaseRunCost, no metering needed). maxUsdPerFlow/
+// maxTokensPerFlow do NOT accumulate across cycles in terminal mode (committed spend
+// stays 0) — they only bound the worst case of runs concurrently in flight. Keep these
+// defaults conservative accordingly. See README "Safety model" + review_loom.md §7.1.
 export const DEFAULT_BUDGET = {
   maxCyclesPerArm: 4,
   maxTokensPerRun: 200_000,

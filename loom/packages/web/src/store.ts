@@ -116,6 +116,8 @@ export interface LoomState {
   zoom: number;
   pan: { x: number; y: number };
   railOpen: boolean;
+  /** Storyline panel visibility (default open). */
+  storylineOpen: boolean;
   /** play/pause is the projected runtime state of the selected flow. */
   running: boolean;
 
@@ -160,6 +162,7 @@ export interface LoomState {
   setMode: (mode: RunMode) => void;
   toggleTheme: () => void;
   setRailOpen: (open: boolean) => void;
+  toggleStoryline: () => void;
   setZoom: (zoom: number) => void;
   zoomBy: (delta: number) => void;
   setPan: (pan: { x: number; y: number }) => void;
@@ -387,6 +390,7 @@ export const useLoomStore = create<LoomState>((set, get) => ({
   zoom: 1,
   pan: { x: 0, y: 0 },
   railOpen: false,
+  storylineOpen: true,
   running: false,
 
   adding: false,
@@ -656,6 +660,7 @@ export const useLoomStore = create<LoomState>((set, get) => ({
   setMode: (mode) => set({ mode, selectedEdgeId: null }),
   toggleTheme: () => set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
   setRailOpen: (open) => set({ railOpen: open }),
+  toggleStoryline: () => set((s) => ({ storylineOpen: !s.storylineOpen })),
   setZoom: (zoom) => set({ zoom: Math.max(0.4, Math.min(2.6, zoom)) }),
   zoomBy: (delta) => get().setZoom((get().zoom || 1) + delta),
   setPan: (pan) => set({ pan }),

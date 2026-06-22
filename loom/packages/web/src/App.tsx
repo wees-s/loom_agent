@@ -7,6 +7,7 @@ import { LeftRail } from "./components/LeftRail";
 import { CanvasGraphContainer } from "./components/CanvasGraph";
 import { CanvasOverlay } from "./components/CanvasOverlay";
 import { Inspector } from "./components/Inspector";
+import { Storyline } from "./components/Storyline";
 import { LogStripConnected } from "./components/LogStrip";
 import { TerminalPanel } from "./components/TerminalPanel";
 
@@ -259,6 +260,7 @@ function AppShell() {
           </div>
 
           <Inspector />
+          <Storyline />
         </div>
 
         {/* ── Live terminal drawer (collapses when no terminal is selected) ── */}

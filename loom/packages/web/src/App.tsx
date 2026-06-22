@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, type ErrorInfo, type ReactNode } from "react";
-import { useLoomStore, selectCurrentFlow } from "./store";
+import { useLoomStore, selectCurrentFlow, isActiveFlowState } from "./store";
 import { startWsClient, type LoomWsClient } from "./wsClient";
 
 import { TopBar } from "./components/TopBar";
@@ -203,7 +203,11 @@ function AppShell() {
   // No flow selected → nothing to run (the button renders disabled, see canRun).
   const onTogglePlay = () => {
     if (!selectedFlowId) return;
-    if (running) {
+    // "active" includes armed-but-idle scheduled flows + awaiting checkpoints —
+    // not just "rodando" — so the button can STOP a flow that is between interval
+    // fires (previously impossible: it showed play and re-fired instead).
+    const active = isActiveFlowState(flow?.state);
+    if (active || running) {
       pause();
       kill();
     } else {

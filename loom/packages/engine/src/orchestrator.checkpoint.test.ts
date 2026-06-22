@@ -20,7 +20,7 @@ function makeFlow(reviewEachCycle: boolean): Flow {
     id: FLOW, name: "loop", version: 1, schedule: "manual", state: "ocioso", cycle: 0,
     reviewEachCycle,
     nodes: [
-      { id: TRIG, type: "Trigger", title: "Trigger", role: "entry", model: "claude-haiku-4-5", prompt: "", linkedContexts: [], position: { x: 0, y: 0 } },
+      { id: TRIG, type: "Trigger", title: "Trigger", role: "entry", model: "claude-haiku-4-5", prompt: "", linkedContexts: [], position: { x: 0, y: 0 }, trigger: { kind: "Intervalo", interval: "30 s" } },
       { id: WORK, type: "Analyst", title: "Worker", role: "w", model: "claude-haiku-4-5", prompt: "faz", linkedContexts: [], position: { x: 1, y: 0 } },
     ],
     edges: [
@@ -50,6 +50,7 @@ function harness(flow: Flow) {
     },
     spendForFlow: () => ({ flowId: FLOW, usdSpent: 0, tokensSpent: 0, usdReserved: 0, tokensReserved: 0 }),
     registerTerminal: () => {}, unregisterTerminal: () => {}, meterToken: () => {},
+    isFlowArmed: () => true,
   } as unknown as Guard;
   // Runner fake: every run ok, no artifacts (nodes declare no produces → barrier passes on ok).
   const runner = {
@@ -100,6 +101,15 @@ describe("orchestrator cycle checkpoint", () => {
     const out = await orch.startCycle(flow, "Manual", 0);
     expect(out.status).not.toBe("awaiting");
     expect(orch.isAwaiting(FLOW)).toBe(false);
+  });
+
+  it("auto mode: an armed scheduled flow ends a cycle as 'agendado', not 'ocioso'", async () => {
+    const flow = makeFlow(false); // no checkpoint; runs + stops at the guard cap
+    const { orch, events } = harness(flow);
+    await orch.startCycle(flow, "Manual", 0);
+    const states = events.filter((e) => e.type === "flow.stateChanged").map((e) => (e as { state: string }).state);
+    expect(states).toContain("agendado");
+    expect(states[states.length - 1]).toBe("agendado"); // settles as scheduled, not stopped
   });
 
   it("clearAwaiting cancels a pending continuation", async () => {

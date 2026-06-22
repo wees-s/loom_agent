@@ -23,6 +23,7 @@ import type { Scheduler } from "./scheduler.js";
 import type { Guard } from "./guard.js";
 import type { Terminals } from "./terminals.js";
 import type { Orchestrator } from "./orchestrator.js";
+import { hasScheduledTrigger } from "./orchestrator.js";
 import type { Generator } from "./generator.js";
 
 import {
@@ -289,10 +290,14 @@ export function createBridge(
           guard.setFlowArmed(flowId, true);
           guard.setFlowPaused(flowId, false);
           scheduler.resumeFlow(flowId);
+          // A flow with an auto-firing trigger is now SCHEDULED (will keep
+          // firing) — surface that so the UI shows AGENDADO + a stop button,
+          // not a misleading "OCIOSO/parado".
+          const playedFlow = spec.get(flowId);
           emit({
             type: "flow.stateChanged",
             flowId,
-            state: "ocioso",
+            state: playedFlow && hasScheduledTrigger(playedFlow) ? "agendado" : "ocioso",
           });
           ack(ws, cmd.cmdId, true);
           break;
@@ -323,6 +328,9 @@ export function createBridge(
           await guard.killFlow(flowId, "user");
           scheduler.pauseFlow(flowId);
           orchestrator.clearAwaiting(flowId);
+          // Kill disarms the flow → project it as stopped (the kill path emitted
+          // no stateChanged before, leaving a stale "rodando"/"agendado").
+          emit({ type: "flow.stateChanged", flowId, state: "ocioso" });
           ack(ws, cmd.cmdId, true);
           break;
         }

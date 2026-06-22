@@ -30,6 +30,7 @@ import {
   type Edge,
   type RunStatus,
   type ModelId,
+  type FlowState,
 } from "@loom/shared";
 import type { CycleCause, Emit, RunCtx, RunResult } from "./internal.js";
 import type { EventLog } from "./eventlog.js";
@@ -104,6 +105,16 @@ const DEFAULT_EST_INPUT_TOKENS = 32_000;
 /** Status values that satisfy the upstream side of the JOIN barrier. */
 function isOkStatus(s: RunStatus): boolean {
   return s === "ok";
+}
+
+/** A flow with an auto-firing trigger (Agendado/Intervalo) keeps firing while
+ *  armed — so its idle state is "agendado" (scheduled), not "ocioso" (stopped).
+ *  This is what lets the UI show "AGENDADO" + a STOP button instead of lying
+ *  that an armed interval flow is idle/stopped. */
+export function hasScheduledTrigger(flow: Flow): boolean {
+  return flow.nodes.some(
+    (n) => n.trigger?.kind === "Agendado" || n.trigger?.kind === "Intervalo",
+  );
 }
 
 export function createOrchestrator(
@@ -644,7 +655,7 @@ export function createOrchestrator(
             totalUsd: cycleSpend(f.id),
             at: Date.now(),
           });
-          emit({ type: "flow.stateChanged", flowId: f.id, state: "ocioso" });
+          emit({ type: "flow.stateChanged", flowId: f.id, state: idleState(f) });
           return { status: "converged", cycle, reason: "no-new-output" };
         }
 
@@ -657,7 +668,7 @@ export function createOrchestrator(
           totalUsd: cycleSpend(f.id),
           at: Date.now(),
         });
-        emit({ type: "flow.stateChanged", flowId: f.id, state: "ocioso" });
+        emit({ type: "flow.stateChanged", flowId: f.id, state: idleState(f) });
         if (next.reason === "flow_killed") return { status: "killed", cycle };
         return { status: "stopped", cycle, reason: `${next.reason}: ${next.detail}` };
       }
@@ -671,11 +682,17 @@ export function createOrchestrator(
         totalUsd: cycleSpend(f.id),
         at: Date.now(),
       });
-      emit({ type: "flow.stateChanged", flowId: f.id, state: "ocioso" });
+      emit({ type: "flow.stateChanged", flowId: f.id, state: idleState(f) });
       return { status: "done", cycle };
     } finally {
       if (!isReentrant) running.delete(flowKey);
     }
+  }
+
+  /** The post-cycle idle state: "agendado" if the flow is armed AND auto-fires
+   *  (so it WILL spend again), else "ocioso". Drives the honest UI status/button. */
+  function idleState(f: Flow): FlowState {
+    return guard.isFlowArmed(f.id) && hasScheduledTrigger(f) ? "agendado" : "ocioso";
   }
 
   /** Best-effort total spend for the flow (for cycle.ended.totalUsd). */

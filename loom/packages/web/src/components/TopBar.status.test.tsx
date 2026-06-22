@@ -42,3 +42,14 @@ describe("TopBar status label reflects the real flow state (not binary running)"
     expect(screen.getByText("AGUARDANDO")).toBeInTheDocument();
   });
 });
+
+describe("TopBar play/stop button reflects ACTIVE state (armed, not just running)", () => {
+  it("an armed-but-idle scheduled flow (agendado) shows the STOP button", () => {
+    render(<TopBar {...props({ running: false, flowState: "agendado" as FlowState })} />);
+    expect(screen.getByTitle("Parar o fluxo")).toBeInTheDocument();
+  });
+  it("a truly stopped flow (ocioso) shows the START button", () => {
+    render(<TopBar {...props({ running: false, flowState: "ocioso" as FlowState })} />);
+    expect(screen.getByTitle(/Iniciar agora/)).toBeInTheDocument();
+  });
+});

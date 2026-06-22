@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import type { TopBarProps } from "../contracts";
+import { isActiveFlowState } from "../store";
 
 /* ════════════════════════════════════════════════════════════════════════
  * TopBar — glass top bar. Ported 1:1 from Loom.dc.html (lines 59-118):
@@ -79,6 +80,11 @@ export function TopBar(props: TopBarProps) {
   const accentGlow = alpha(ACCENT, 0.55);
 
   // Status pill (run mode) — DCLogic statusBg/Border/Dot/Text/Anim.
+  // "active" = the flow will spend if left alone (running OR scheduled OR
+  // awaiting) → the button must offer STOP. Falls back to `running` when no
+  // flowState is provided (older callers).
+  const active = flowState ? isActiveFlowState(flowState) : running;
+
   const statusBg = running ? alpha(ACCENT, 0.12) : "var(--fill)";
   const statusBorder = running ? alpha(ACCENT, 0.25) : "var(--line)";
   const statusDot = running ? ACCENT : "var(--muted)";
@@ -243,12 +249,12 @@ export function TopBar(props: TopBarProps) {
             title={
               !canRun
                 ? "Selecione ou crie um fluxo primeiro"
-                : running
+                : active
                   ? "Parar o fluxo"
                   : "Iniciar agora (executa + agenda)"
             }
           >
-            {running ? (
+            {active ? (
               <svg width="14" height="14" viewBox="0 0 14 14">
                 <rect x="2.5" y="2" width="3.2" height="10" rx="1" fill="#fff" />
                 <rect x="8.3" y="2" width="3.2" height="10" rx="1" fill="#fff" />

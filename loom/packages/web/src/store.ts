@@ -21,6 +21,7 @@ import type {
   ModelId,
   NarrationLine,
   NarrationCtx,
+  FlowState,
 } from "@loom/shared";
 import {
   MODEL_CATALOG,
@@ -843,6 +844,13 @@ export const selectInspectorKind = (s: LoomState): "none" | "node" | "edge" =>
   s.selectedEdgeId ? "edge" : s.selectedNodeId ? "node" : "none";
 
 export const selectStoryline = (s: LoomState): NarrationLine[] => s.storyline;
+
+/** A flow is "active" (will spend if left alone) when running, scheduled, or
+ *  awaiting a checkpoint. The play/stop button must offer STOP for ALL of these,
+ *  not just "rodando" — otherwise an armed interval flow can't be stopped. */
+export function isActiveFlowState(state?: FlowState): boolean {
+  return state === "rodando" || state === "agendado" || state === "aguardando";
+}
 
 export const selectIsNodeActive = (s: LoomState, nodeId: string): boolean => s.activeNodeIds.has(nodeId);
 export const selectIsEdgeActive = (s: LoomState, edgeId: string): boolean => s.activeEdgeIds.has(edgeId);

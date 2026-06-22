@@ -54,7 +54,7 @@ const TAB_OFF: CSSProperties = {
 };
 
 export function TopBar(props: TopBarProps) {
-  const { flowName, cycle, mode, running, theme, connection, canRun, onSetMode, onTogglePlay, onToggleTheme } = props;
+  const { flowName, cycle, mode, running, theme, connection, canRun, onSetMode, onTogglePlay, onToggleTheme, onSaveSpec } = props;
 
   const edit = mode === "edit";
   const isDark = theme === "dark";
@@ -272,6 +272,39 @@ export function TopBar(props: TopBarProps) {
             MODO EDIÇÃO
           </span>
         </div>
+      )}
+
+      {/* edit-mode: persist topology to the engine (without this, edits stay local) */}
+      {edit && (
+        <button
+          type="button"
+          onClick={onSaveSpec}
+          disabled={!canRun}
+          title={canRun ? "Salvar o fluxo (versiona a spec no engine)" : "Selecione um fluxo primeiro"}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 14px",
+            border: "none",
+            borderRadius: 11,
+            cursor: canRun ? "pointer" : "not-allowed",
+            opacity: canRun ? 1 : 0.45,
+            background: ACCENT,
+            color: "#fff",
+            fontSize: 12.5,
+            fontWeight: 600,
+            boxShadow: canRun ? `0 6px 18px -6px ${accentGlow},inset 0 1px 0 rgba(255,255,255,0.3)` : "none",
+          }}
+          onMouseEnter={(e) => { if (canRun) e.currentTarget.style.filter = "brightness(1.06)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 2.5h7.5L12 5v6.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5Z" stroke="#fff" strokeWidth="1.3" />
+            <path d="M4.5 2.5v3h4v-3M4.5 12V8.5h5V12" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+          Salvar
+        </button>
       )}
 
       {/* engine connection indicator */}

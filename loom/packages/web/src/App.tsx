@@ -175,6 +175,7 @@ function AppShell() {
   const kill = useLoomStore((s) => s.kill);
   const selectedFlowId = useLoomStore((s) => s.selectedFlowId);
   const toggleTheme = useLoomStore((s) => s.toggleTheme);
+  const saveSpec = useLoomStore((s) => s.saveSpec);
 
   const wsRef = useRef<LoomWsClient | null>(null);
 
@@ -246,6 +247,7 @@ function AppShell() {
           onSetMode={setMode}
           onTogglePlay={onTogglePlay}
           onToggleTheme={toggleTheme}
+          onSaveSpec={saveSpec}
         />
 
         {/* ── Middle row: LeftRail · Canvas · Inspector ── */}

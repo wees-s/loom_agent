@@ -43,6 +43,9 @@ export interface TopBarProps {
   onSetMode: (mode: RunMode) => void;
   onTogglePlay: () => void;
   onToggleTheme: () => void;
+  /** Persist the current topology (edit-mode "Salvar"). Without this, node/edge
+   *  edits stay local and never reach the engine. */
+  onSaveSpec: () => void;
 }
 
 export interface LeftRailProps {

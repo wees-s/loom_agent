@@ -40,6 +40,7 @@ body {
   --blob1: oklch(0.78 0.006 250);
   --blob2: oklch(0.73 0.006 250);
   --blob3: oklch(0.76 0.006 250);
+  --accent: oklch(0.62 0.14 160);
 }
 [data-loom][data-theme="dark"] {
   --page: radial-gradient(120% 120% at 12% 8%, #20242a 0%, #1a1e23 45%, #15181c 100%);
@@ -63,6 +64,7 @@ body {
   --blob1: oklch(0.52 0.008 250);
   --blob2: oklch(0.47 0.008 250);
   --blob3: oklch(0.50 0.008 250);
+  --accent: oklch(0.62 0.14 160);
 }
 @keyframes blob {
   0%,
@@ -119,4 +121,20 @@ body {
 input::placeholder,
 textarea::placeholder {
   color: var(--muted);
+}
+
+/* Accessibility: honor reduced-motion (decorative blobs/pulses) + keyboard focus. */
+@media (prefers-reduced-motion: reduce) {
+  [data-loom] *,
+  [data-loom] *::before,
+  [data-loom] *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+[data-loom] :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }

@@ -147,6 +147,28 @@ describe("spec — workDir round-trips through save/load + is mkdir'd on save", 
     expect(reloaded.find((f) => f.id === flow.id)?.workDir).toBe(workDir);
   });
 
+  it("round-trips reviewEachCycle through save + reload", async () => {
+    const { flow } = await store.create("Review Flow");
+    const { flow: saved } = await store.save({
+      id: flow.id,
+      name: flow.name,
+      reviewEachCycle: true,
+      nodes: flow.nodes,
+      edges: flow.edges,
+    });
+    expect(saved.reviewEachCycle).toBe(true);
+    expect(store.get(flow.id)?.reviewEachCycle).toBe(true);
+
+    // Persisted to YAML + reloaded by a fresh store.
+    const files = await fs.readdir(flowsDir);
+    const yamlFile = files.find((f) => f.endsWith(".flow.yaml"));
+    const raw = await fs.readFile(join(flowsDir, yamlFile as string), "utf8");
+    expect(raw).toContain("reviewEachCycle: true");
+    const fresh = createSpecStore(flowsDir, specVersionsDir, makeEmitter().emit);
+    const reloaded = await fresh.listFlows();
+    expect(reloaded.find((f) => f.id === flow.id)?.reviewEachCycle).toBe(true);
+  });
+
   it("clearing workDir (empty string) removes it from the YAML on the next save", async () => {
     const { flow } = await store.create("WD Clear");
     const workDir = join(root, "to-be-cleared");

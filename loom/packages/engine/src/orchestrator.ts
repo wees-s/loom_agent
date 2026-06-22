@@ -52,7 +52,8 @@ export type CycleOutcome =
   | { status: "done"; cycle: number }
   | { status: "converged"; cycle: number; reason: "no-new-output" }
   | { status: "stopped"; cycle: number; reason: string }
-  | { status: "killed"; cycle: number };
+  | { status: "killed"; cycle: number }
+  | { status: "awaiting"; cycle: number };
 
 export interface Orchestrator {
   /** Pure planner: build the feedback-cut DAG + Kahn layers for a flow. */
@@ -74,6 +75,14 @@ export interface Orchestrator {
 
   /** True while a cycle is in flight for the flow (scheduler no-overlap guard). */
   isRunning(flowId: FlowId): boolean;
+
+  /** Human-in-the-loop: resume a flow paused at a cycle checkpoint. Returns the
+   *  next cycle's outcome, or null if nothing was awaiting. */
+  continueFlow(flowId: FlowId): Promise<CycleOutcome | null>;
+  /** True while a flow is paused at a cycle checkpoint (scheduler no-overlap). */
+  isAwaiting(flowId: FlowId): boolean;
+  /** Drop a pending checkpoint continuation (pause/kill). */
+  clearAwaiting(flowId: FlowId): void;
 }
 
 // -----------------------------------------------------------------------------
@@ -108,6 +117,9 @@ export function createOrchestrator(
 ): Orchestrator {
   /** Flows with a cycle currently in flight (scheduler no-overlap guard). */
   const running = new Set<string>();
+
+  /** Flows paused at a cycle checkpoint → the approved next arm to resume with. */
+  const pendingApprovals = new Map<string, { arm: number }>();
 
   // ---------------------------------------------------------------------------
   // PLAN — feedback-cut DAG + Kahn layering.
@@ -585,7 +597,7 @@ export function createOrchestrator(
             );
             if (edge) emit({ type: "edge.fired", flowId: f.id, edgeId: edge.id, cycle });
           }
-          // Close out THIS cycle as done before recursing into the next arm.
+          // Close out THIS cycle as done before continuing.
           emit({
             type: "cycle.ended",
             flowId: f.id,
@@ -594,8 +606,25 @@ export function createOrchestrator(
             totalUsd: cycleSpend(f.id),
             at: Date.now(),
           });
-          // Recurse on the next arm (running flag stays set: re-entrant call).
-          return await startCycle(f, "feedback", arm + 1);
+
+          // HUMAN-IN-THE-LOOP checkpoint: if the flow reviews each cycle, pause
+          // here (the next arm is already admitted by the guard) and wait for an
+          // explicit flow.continue. Strictly more conservative — we only DEFER.
+          if (f.reviewEachCycle === true) {
+            pendingApprovals.set(f.id as string, { arm: next.value.arm });
+            emit({
+              type: "cycle.awaitingApproval",
+              flowId: f.id,
+              cycle,
+              nextArm: next.value.arm,
+              at: Date.now(),
+            });
+            emit({ type: "flow.stateChanged", flowId: f.id, state: "aguardando" });
+            return { status: "awaiting", cycle };
+          }
+
+          // Auto mode: recurse on the next arm (running flag stays set).
+          return await startCycle(f, "feedback", next.value.arm);
         }
 
         // Denied: translate the guard's reason into a converged/stopped outcome.
@@ -723,7 +752,38 @@ export function createOrchestrator(
     return running.has(flowId as string);
   }
 
-  return { plan, startCycle, recoverOrphans, isRunning };
+  // ---------------------------------------------------------------------------
+  // HUMAN-IN-THE-LOOP — cycle checkpoint resume / cancel.
+  // ---------------------------------------------------------------------------
+
+  function isAwaiting(flowId: FlowId): boolean {
+    return pendingApprovals.has(flowId as string);
+  }
+
+  function clearAwaiting(flowId: FlowId): void {
+    pendingApprovals.delete(flowId as string);
+  }
+
+  async function continueFlow(flowId: FlowId): Promise<CycleOutcome | null> {
+    const pending = pendingApprovals.get(flowId as string);
+    if (!pending) return null;
+    pendingApprovals.delete(flowId as string);
+    const flow = spec.get(flowId);
+    if (!flow) return null;
+    emit({ type: "flow.stateChanged", flowId, state: "rodando" });
+    // Resume the arm the guard already admitted (no re-admission → no double count).
+    return startCycle(flow, "feedback", pending.arm);
+  }
+
+  return {
+    plan,
+    startCycle,
+    recoverOrphans,
+    isRunning,
+    continueFlow,
+    isAwaiting,
+    clearAwaiting,
+  };
 }
 
 // Re-export id coercions used in tests that drive the orchestrator with raw ids.

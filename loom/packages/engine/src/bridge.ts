@@ -271,6 +271,7 @@ export function createBridge(
           guard.setFlowArmed(flowId, false);
           guard.setFlowPaused(flowId, true);
           scheduler.pauseFlow(flowId);
+          orchestrator.clearAwaiting(flowId);
           emit({
             type: "flow.stateChanged",
             flowId,
@@ -286,7 +287,26 @@ export function createBridge(
           // killFlow disarms the guard; also disarm the scheduler triggers.
           await guard.killFlow(flowId, "user");
           scheduler.pauseFlow(flowId);
+          orchestrator.clearAwaiting(flowId);
           ack(ws, cmd.cmdId, true);
+          break;
+        }
+
+        // ----- flow.continue --------------------------------------------------
+        case "flow.continue": {
+          const flowId = asFlowId(cmd.flowId);
+          // Human-in-the-loop: resume a flow paused at a cycle checkpoint. The
+          // orchestrator holds the already-admitted next arm; null means nothing
+          // was awaiting (e.g. after a restart lost the in-memory pending).
+          const resumed = await orchestrator.continueFlow(flowId);
+          if (resumed === null) {
+            // Unstick the projected state so the UI's "aguardando" doesn't linger
+            // with a dead Continue button, then report the no-op.
+            emit({ type: "flow.stateChanged", flowId, state: "ocioso" });
+            ack(ws, cmd.cmdId, false, "nada aguardando aprovação neste fluxo");
+          } else {
+            ack(ws, cmd.cmdId, true);
+          }
           break;
         }
 
@@ -327,6 +347,7 @@ export function createBridge(
           await guard.killFlow(flowId, "user");
           guard.setFlowArmed(flowId, false);
           scheduler.pauseFlow(flowId);
+          orchestrator.clearAwaiting(flowId);
           // 2. Archive the YAML (never hard-rm) + drop from the spec cache.
           const result = await spec.delete(flowId);
           // 3. Emit the removal so every client's projection drops the flow from

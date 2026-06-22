@@ -52,6 +52,7 @@ export type ClientCommand =
   | { t: "flow.create"; cmdId: string; name: string }
   | { t: "flow.delete"; cmdId: string; flowId: FlowId }
   | { t: "flow.continue"; cmdId: string; flowId: FlowId }
+  | { t: "flow.generate"; cmdId: string; prompt: string }
   | { t: "spec.save"; cmdId: string; flow: EditableFlow }
   | { t: "setTrigger"; cmdId: string; flowId: FlowId; nodeId: NodeId; trigger: TriggerConfig }
   | { t: "node.subscribe"; cmdId: string; flowId: FlowId; nodeId: NodeId }

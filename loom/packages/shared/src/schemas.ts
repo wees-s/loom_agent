@@ -84,6 +84,37 @@ export const zEditableFlow = z.object({
   edges: z.array(zEdge),
 });
 
+// What the NL generator (LLM) must emit. Node ids are payload-local (referenced
+// by edges); model is optional (coerced to a default before parse if invalid).
+const zGeneratedNode = z.object({
+  id: z.string().min(1),
+  type: zNodeTypeName,
+  title: z.string(),
+  role: z.string(),
+  prompt: z.string(),
+  model: zModelId.optional(),
+  produces: z.array(z.string()).optional(),
+  contextIsolation: z.boolean().optional(),
+  trigger: zTriggerConfig.optional(),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
+});
+export const zGeneratedFlow = z
+  .object({
+    name: z.string().min(1),
+    reviewEachCycle: z.boolean().optional(),
+    nodes: z.array(zGeneratedNode).min(1),
+    edges: z.array(z.object({ from: z.string(), to: z.string(), feedback: z.boolean().optional() })),
+  })
+  .refine((f) => f.nodes.some((n) => n.type === "Trigger"), { message: "needs at least one Trigger node" })
+  .refine(
+    (f) => {
+      const ids = new Set(f.nodes.map((n) => n.id));
+      return f.edges.every((e) => ids.has(e.from) && ids.has(e.to));
+    },
+    { message: "every edge must reference existing node ids" },
+  );
+export type GeneratedFlow = z.infer<typeof zGeneratedFlow>;
+
 export const zClientCommand = z.discriminatedUnion("t", [
   z.object({ t: z.literal("subscribe"), flowId: z.string(), sinceSeq: z.number().optional() }),
   z.object({ t: z.literal("flow.play"), cmdId: z.string(), flowId: z.string() }),
@@ -93,6 +124,7 @@ export const zClientCommand = z.discriminatedUnion("t", [
   z.object({ t: z.literal("flow.create"), cmdId: z.string(), name: z.string() }),
   z.object({ t: z.literal("flow.delete"), cmdId: z.string(), flowId: z.string() }),
   z.object({ t: z.literal("flow.continue"), cmdId: z.string(), flowId: z.string() }),
+  z.object({ t: z.literal("flow.generate"), cmdId: z.string(), prompt: z.string().min(1) }),
   z.object({ t: z.literal("spec.save"), cmdId: z.string(), flow: zEditableFlow }),
   z.object({ t: z.literal("setTrigger"), cmdId: z.string(), flowId: z.string(), nodeId: z.string(), trigger: zTriggerConfig }),
   z.object({ t: z.literal("node.subscribe"), cmdId: z.string(), flowId: z.string(), nodeId: z.string() }),

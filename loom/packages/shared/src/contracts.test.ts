@@ -7,11 +7,37 @@ import {
   typeDef,
   semanticsOf,
   zFlowSpec,
+  zGeneratedFlow,
   zClientCommand,
   findForwardCycle,
   PROTOCOL_VERSION,
   makeId,
 } from "./index.js";
+
+describe("flow.generate + zGeneratedFlow", () => {
+  it("zClientCommand accepts flow.generate", () => {
+    expect(zClientCommand.safeParse({ t: "flow.generate", cmdId: "c1", prompt: "faça um loop" }).success).toBe(true);
+  });
+  const good = {
+    name: "Revisor de PRs",
+    nodes: [
+      { id: "t", type: "Trigger", title: "Cron", role: "entry", prompt: "" },
+      { id: "a", type: "Analyst", title: "Analista", role: "analisa", prompt: "analise os PRs" },
+    ],
+    edges: [{ from: "t", to: "a" }],
+  };
+  it("zGeneratedFlow accepts a valid full flow", () => {
+    expect(zGeneratedFlow.safeParse(good).success).toBe(true);
+  });
+  it("rejects a flow with no Trigger node", () => {
+    const noTrig = { ...good, nodes: [good.nodes[1]] };
+    expect(zGeneratedFlow.safeParse(noTrig).success).toBe(false);
+  });
+  it("rejects an edge referencing an unknown node id", () => {
+    const badEdge = { ...good, edges: [{ from: "t", to: "ghost" }] };
+    expect(zGeneratedFlow.safeParse(badEdge).success).toBe(false);
+  });
+});
 
 describe("flow.continue + reviewEachCycle contracts", () => {
   it("zClientCommand accepts flow.continue", () => {

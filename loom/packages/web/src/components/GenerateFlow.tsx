@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { useLoomStore } from "../store";
+import { RADIUS, FONT } from "../theme/primitives";
 
 /* ════════════════════════════════════════════════════════════════════════
  * GenerateFlow — "✨ Gerar com IA". Describe a flow in natural language and the
@@ -28,7 +29,7 @@ export function GenerateFlow() {
           boxSizing: "border-box",
           fontFamily: "inherit",
           fontSize: 12,
-          borderRadius: 9,
+          borderRadius: RADIUS.sm,
           border: "1px solid var(--line)",
           background: "var(--input)",
           color: "var(--text2)",
@@ -43,10 +44,10 @@ export function GenerateFlow() {
         style={{
           padding: "8px 12px",
           border: "none",
-          borderRadius: 9,
+          borderRadius: RADIUS.sm,
           background: "oklch(0.62 0.14 290)",
           color: "#fff",
-          fontSize: 12.5,
+          fontSize: FONT.md,
           fontWeight: 600,
           cursor: generating ? "default" : "pointer",
           opacity: generating || prompt.trim().length === 0 ? 0.6 : 1,

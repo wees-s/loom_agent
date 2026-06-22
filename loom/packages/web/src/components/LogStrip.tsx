@@ -1,5 +1,6 @@
 import { type CSSProperties } from "react";
 import { useLoomStore } from "../store";
+import { glassPanel, SPACE } from "../theme/primitives";
 import { LEGEND } from "../contracts";
 import type { LogStripProps } from "../contracts";
 
@@ -21,19 +22,12 @@ import type { LogStripProps } from "../contracts";
  * ════════════════════════════════════════════════════════════════════════ */
 
 /* ── container ──────────────────────────────────────────────────────── */
-const STRIP_STYLE: CSSProperties = {
+const STRIP_STYLE: CSSProperties = glassPanel({
   display: "flex",
   alignItems: "center",
-  gap: 16,
+  gap: SPACE.lg,
   padding: "9px 16px",
-  borderRadius: 15,
-  background: "var(--glass)",
-  backdropFilter: "blur(22px) saturate(1.4)",
-  WebkitBackdropFilter: "blur(22px) saturate(1.4)",
-  border: "1px solid var(--glass-border)",
-  boxShadow:
-    "0 10px 40px -16px rgba(30,55,45,0.18),inset 0 1px 0 rgba(255,255,255,0.7)",
-};
+});
 
 /* ── legend cluster ─────────────────────────────────────────────────── */
 const LEGEND_CLUSTER_STYLE: CSSProperties = {

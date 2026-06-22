@@ -1,6 +1,7 @@
 import { type CSSProperties, useMemo } from "react";
 import { useLoomStore, selectStoryline } from "../store";
-import type { NarrationLine, NarrationKind, NarrationTone } from "@loom/shared";
+import { glassPanel, TONE } from "../theme/primitives";
+import type { NarrationLine, NarrationKind } from "@loom/shared";
 
 /* ════════════════════════════════════════════════════════════════════════
  * Storyline — a calm, human, live narrative of the selected flow's run.
@@ -8,19 +9,13 @@ import type { NarrationLine, NarrationKind, NarrationTone } from "@loom/shared";
  * cycle, newest cycle first. No authoritative state of its own.
  * ════════════════════════════════════════════════════════════════════════ */
 
-const PANEL_STYLE: CSSProperties = {
+const PANEL_STYLE: CSSProperties = glassPanel({
   width: 300,
   flex: "none",
   display: "flex",
   flexDirection: "column",
-  borderRadius: 15,
-  background: "var(--glass)",
-  backdropFilter: "blur(22px) saturate(1.4)",
-  WebkitBackdropFilter: "blur(22px) saturate(1.4)",
-  border: "1px solid var(--glass-border)",
-  boxShadow: "0 10px 40px -16px rgba(30,55,45,0.18),inset 0 1px 0 rgba(255,255,255,0.7)",
   overflow: "hidden",
-};
+});
 
 const HEADER_STYLE: CSSProperties = {
   padding: "11px 15px",
@@ -48,13 +43,6 @@ const CYCLE_HEADER_STYLE: CSSProperties = {
   margin: "12px 0 4px",
 };
 
-const TONE_DOT: Record<NarrationTone, string> = {
-  neutral: "var(--line2)",
-  good: "oklch(0.62 0.14 160)",
-  warn: "oklch(0.78 0.13 80)",
-  bad: "oklch(0.62 0.18 25)",
-};
-
 const KIND_ICON: Record<NarrationKind, string> = {
   trigger: "⚡", agent: "●", artifact: "✎", cycle: "↻", budget: "⚠", kill: "■", system: "·",
 };
@@ -76,7 +64,7 @@ function formatBytes(b: number): string {
 function Line({ line }: { line: NarrationLine }) {
   return (
     <div style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 12.5, lineHeight: 1.45 }}>
-      <span style={{ color: TONE_DOT[line.tone], flex: "none", fontSize: 11 }}>{KIND_ICON[line.kind]}</span>
+      <span style={{ color: TONE[line.tone], flex: "none", fontSize: 11 }}>{KIND_ICON[line.kind]}</span>
       <span style={{ flex: 1, minWidth: 0, color: "var(--text2)" }}>
         {line.actor && <strong style={{ color: "var(--text)" }}>{line.actor} </strong>}
         {line.text}

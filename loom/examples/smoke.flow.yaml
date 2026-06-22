@@ -1,0 +1,59 @@
+# Smoke — minimal REAL haiku flow for end-to-end release verification.
+# Two agent nodes, BOTH on claude-haiku-4-5 (cheapest), trivial prompts:
+#   writer  -> writes ONE short line to smoke.md
+#   appender-> appends ONE short line to smoke.md
+# No feedback edge => exactly one cycle. Low budgets + small --max-turns keep
+# real cost to a few cents. The Trigger node is a pure entry point (no agent).
+id: smoke
+name: Smoke (real haiku)
+version: 0
+schedule: Manual
+blackboardDir: smoke
+budget:
+  # Haiku worst-case pre-spend (guard admission): 64K out * $5/1M + 32K in * $1/1M
+  # = $0.352 and 96K tokens, so the per-run caps must clear that or the guard
+  # would (correctly) refuse to ever admit the run.
+  maxCyclesPerArm: 1
+  maxTokensPerRun: 120000
+  maxUsdPerRun: 1
+  maxTokensPerFlow: 500000
+  maxUsdPerFlow: 3
+  maxConcurrentAgents: 1
+  convergenceWindow: 2
+nodes:
+  - id: trigger
+    type: Trigger
+    title: Gatilho manual
+    role: Inicia o smoke test sob demanda.
+    model: claude-haiku-4-5
+    prompt: ""
+    linkedContexts: []
+    position: { x: 80, y: 200 }
+    trigger:
+      kind: Manual
+  - id: writer
+    type: Analyst
+    title: Escritor
+    role: Escreve a primeira linha do smoke.
+    model: claude-haiku-4-5
+    prompt: |
+      Crie o arquivo smoke.md no diretório de trabalho com EXATAMENTE uma linha
+      curta de texto: "linha 1: smoke ok pelo escritor". Não escreva mais nada.
+    linkedContexts: ["smoke.md"]
+    position: { x: 360, y: 200 }
+    produces: ["smoke.md"]
+  - id: appender
+    type: Executor
+    title: Anexador
+    role: Acrescenta a segunda linha ao smoke.
+    model: claude-haiku-4-5
+    prompt: |
+      Leia smoke.md e reescreva-o preservando a linha existente e ADICIONANDO uma
+      segunda linha curta ao final: "linha 2: smoke ok pelo anexador". Mantenha as
+      duas linhas e nada mais.
+    linkedContexts: ["smoke.md"]
+    position: { x: 640, y: 200 }
+    produces: ["smoke.md"]
+edges:
+  - { id: e1, from: trigger, to: writer }
+  - { id: e2, from: writer, to: appender }

@@ -1,0 +1,59 @@
+# Inbox Triage — disparado por webhook ao chegar e-mail/mensagem.
+# Classifica, redige resposta e o Operador envia.
+id: inbox-triage
+name: Inbox Triage
+version: 0
+schedule: "ao receber webhook"
+blackboardDir: inbox
+budget:
+  maxCyclesPerArm: 2
+  maxTokensPerRun: 120000
+  maxUsdPerRun: 1
+  maxTokensPerFlow: 1000000
+  maxUsdPerFlow: 10
+  maxConcurrentAgents: 2
+  convergenceWindow: 2
+nodes:
+  - id: trigger
+    type: Trigger
+    title: Webhook
+    role: Dispara ao receber uma nova mensagem.
+    model: claude-haiku-4-5
+    prompt: ""
+    linkedContexts: []
+    position: { x: 80, y: 200 }
+    trigger:
+      kind: Webhook
+      event: "inbox.received"
+  - id: classifier
+    type: Analyst
+    title: Classificador
+    role: Classifica intenção e urgência.
+    model: claude-haiku-4-5
+    prompt: "Classifique a mensagem em message.md; escreva triage.json."
+    linkedContexts: ["message.md", "triage.json"]
+    position: { x: 380, y: 200 }
+    produces: ["triage.json"]
+  - id: drafter
+    type: Writer
+    title: Redator de resposta
+    role: Redige uma resposta adequada.
+    model: claude-sonnet-4-6
+    prompt: "Com base em triage.json, redija reply.md."
+    linkedContexts: ["triage.json", "reply.md"]
+    position: { x: 680, y: 200 }
+    produces: ["reply.md"]
+  - id: operator
+    type: Operator
+    title: Operador
+    role: Envia a resposta aprovada.
+    model: claude-haiku-4-5
+    prompt: "Envie reply.md ao destinatário e registre em metrics.json."
+    linkedContexts: ["reply.md", "metrics.json"]
+    position: { x: 980, y: 200 }
+    produces: ["metrics.json"]
+edges:
+  - { id: e1, from: trigger, to: classifier }
+  - { id: e2, from: classifier, to: drafter }
+  - { id: e3, from: drafter, to: operator }
+  - { id: e4, from: operator, to: trigger, feedback: true, phase: 0.2 }

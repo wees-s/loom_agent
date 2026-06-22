@@ -1,0 +1,39 @@
+# Demo rápido: dispara a cada 30s. Copie para flows/, selecione no rail e dê ▶️.
+# Em LOOM_RUNNER=fake roda de mentira (custo zero) só pra você VER o ciclo + o
+# terminal. Tire o fake e ele roda um claude haiku de verdade a cada 30s.
+id: demo-rapido
+name: Demo rápido (30s)
+version: 0
+schedule: "a cada 30 s"
+blackboardDir: demo-rapido
+budget:
+  maxCyclesPerArm: 1
+  maxTokensPerRun: 120000
+  maxUsdPerRun: 1
+  maxTokensPerFlow: 500000
+  maxUsdPerFlow: 5
+  maxConcurrentAgents: 1
+  convergenceWindow: 2
+nodes:
+  - id: trigger
+    type: Trigger
+    title: A cada 30s
+    role: dispara a cada 30 segundos
+    model: claude-haiku-4-5
+    prompt: ""
+    linkedContexts: []
+    position: { x: 100, y: 220 }
+    trigger: { kind: Intervalo, interval: "30 s" }
+  - id: agente
+    type: Analyst
+    title: Agente
+    role: escreve uma nota com a hora
+    model: claude-haiku-4-5
+    prompt: |
+      Escreva (ou sobrescreva) o arquivo nota.md com UMA frase curta dizendo
+      a hora atual. Não escreva mais nada.
+    linkedContexts: ["nota.md"]
+    position: { x: 400, y: 220 }
+    produces: ["nota.md"]
+edges:
+  - { id: e1, from: trigger, to: agente }

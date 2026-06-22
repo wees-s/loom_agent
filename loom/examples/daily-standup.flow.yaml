@@ -1,0 +1,85 @@
+# Daily Standup — Scribe reúne o log do dia, Analyst extrai riscos,
+# Synthesizer compõe o resumo e o Executor publica. Feedback do Reviewer
+# re-arma o ciclo (cortado do DAG, mediado pelo guard).
+id: daily-standup
+name: Daily Standup
+version: 0
+schedule: "09:00"
+blackboardDir: daily
+budget:
+  # maxUsdPerRun must cover the worst-case cost of the most expensive node. The
+  # Synthesizer runs on Opus 4.8 whose pre-spend worst case is
+  # 128K out * $25/1M + 32K in * $5/1M = $3.36, so a $2 cap would make the guard
+  # (correctly) refuse to ever admit it — the synth/executor path would be dead.
+  maxCyclesPerArm: 3
+  maxTokensPerRun: 200000
+  maxUsdPerRun: 4
+  maxTokensPerFlow: 2000000
+  maxUsdPerFlow: 15
+  maxConcurrentAgents: 3
+  convergenceWindow: 2
+nodes:
+  - id: trigger
+    type: Trigger
+    title: Gatilho diário
+    role: Inicia o standup às 09:00 em dias úteis.
+    model: claude-haiku-4-5
+    prompt: ""
+    linkedContexts: []
+    position: { x: 80, y: 220 }
+    trigger:
+      kind: Agendado
+      freq: "Dias úteis"
+      time: "09:00"
+  - id: scribe
+    type: Analyst
+    title: Scribe
+    role: Coleta atualizações e monta o daily-log.
+    model: claude-sonnet-4-6
+    prompt: |
+      Reúna as atualizações de cada membro a partir das fontes ligadas e escreva
+      um daily-log conciso em daily-log.md. Liste blockers explicitamente.
+    linkedContexts: ["daily-log.md", "#standup"]
+    position: { x: 360, y: 120 }
+    produces: ["daily-log.md"]
+  - id: risk
+    type: Critic
+    title: Analista de risco
+    role: Extrai riscos e blockers do log.
+    model: claude-sonnet-4-6
+    prompt: |
+      A partir de daily-log.md, identifique riscos e blockers. Escreva risks.md
+      com severidade e dono sugerido.
+    linkedContexts: ["daily-log.md"]
+    position: { x: 360, y: 320 }
+    produces: ["risks.md"]
+  - id: synth
+    type: Synthesizer
+    title: Sintetizador
+    role: Combina log e riscos em um resumo neutro.
+    model: claude-opus-4-8
+    prompt: |
+      Combine daily-log.md e risks.md em um resumo executivo curto em decision.md.
+      Não invente fatos; use apenas os artefatos.
+    linkedContexts: []
+    position: { x: 680, y: 220 }
+    produces: ["decision.md"]
+    contextIsolation: true
+  - id: publisher
+    type: Executor
+    title: Publicador
+    role: Publica o resumo no canal e fecha o ciclo.
+    model: claude-haiku-4-5
+    prompt: |
+      Publique o conteúdo de decision.md no canal #standup e registre métricas
+      em metrics.json.
+    linkedContexts: ["#standup", "metrics.json"]
+    position: { x: 1000, y: 220 }
+    produces: ["metrics.json"]
+edges:
+  - { id: e1, from: trigger, to: scribe }
+  - { id: e2, from: trigger, to: risk }
+  - { id: e3, from: scribe, to: synth }
+  - { id: e4, from: risk, to: synth }
+  - { id: e5, from: synth, to: publisher }
+  - { id: e6, from: publisher, to: trigger, feedback: true, phase: 0.5 }

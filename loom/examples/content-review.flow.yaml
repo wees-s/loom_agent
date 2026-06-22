@@ -1,0 +1,95 @@
+# Content Review — Writer rascunha, três analistas paralelos auditam
+# (estilo, fatos, jurídico), Synthesizer concilia, Reviewer aprova.
+id: content-review
+name: Content Review
+version: 0
+schedule: "a cada 6h"
+blackboardDir: content
+budget:
+  maxCyclesPerArm: 4
+  maxTokensPerRun: 200000
+  maxUsdPerRun: 3
+  maxTokensPerFlow: 3000000
+  maxUsdPerFlow: 25
+  maxConcurrentAgents: 3
+  convergenceWindow: 2
+nodes:
+  - id: trigger
+    type: Trigger
+    title: Intervalo
+    role: Verifica a fila de rascunhos a cada 6h.
+    model: claude-haiku-4-5
+    prompt: ""
+    linkedContexts: []
+    position: { x: 80, y: 240 }
+    trigger:
+      kind: Intervalo
+      interval: "6 h"
+  - id: writer
+    type: Writer
+    title: Redator
+    role: Produz o rascunho a partir do briefing.
+    model: claude-sonnet-4-6
+    prompt: |
+      Escreva o rascunho em draft.md seguindo o briefing em brief.md.
+    linkedContexts: ["brief.md", "draft.md"]
+    position: { x: 360, y: 240 }
+    produces: ["draft.md"]
+  - id: style
+    type: Critic
+    title: Auditor de estilo
+    role: Avalia tom e clareza.
+    model: claude-haiku-4-5
+    prompt: "Revise draft.md quanto a estilo e clareza; escreva notes-style.md."
+    linkedContexts: ["draft.md"]
+    position: { x: 680, y: 100 }
+    produces: ["notes-style.md"]
+  - id: facts
+    type: Auditor
+    title: Checagem de fatos
+    role: Verifica afirmações factuais.
+    model: claude-sonnet-4-6
+    prompt: "Verifique as afirmações de draft.md; escreva notes-facts.md."
+    linkedContexts: ["draft.md"]
+    position: { x: 680, y: 240 }
+    produces: ["notes-facts.md"]
+  - id: legal
+    type: Legal Advisor
+    title: Jurídico
+    role: Aponta riscos legais.
+    model: claude-sonnet-4-6
+    prompt: "Analise draft.md quanto a riscos legais; escreva notes-legal.md."
+    linkedContexts: ["draft.md"]
+    position: { x: 680, y: 380 }
+    produces: ["notes-legal.md"]
+  - id: synth
+    type: Synthesizer
+    title: Conciliador
+    role: Aplica as notas e gera a versão final.
+    model: claude-opus-4-8
+    prompt: |
+      Combine notes-style.md, notes-facts.md e notes-legal.md sobre draft.md e
+      produza final.md. Use apenas os artefatos.
+    linkedContexts: []
+    position: { x: 1000, y: 240 }
+    produces: ["final.md"]
+    contextIsolation: true
+  - id: reviewer
+    type: Reviewer
+    title: Aprovador
+    role: Aprova ou devolve para revisão.
+    model: claude-sonnet-4-6
+    prompt: "Aprove final.md ou registre pendências em review.md."
+    linkedContexts: ["final.md", "review.md"]
+    position: { x: 1320, y: 240 }
+    produces: ["review.md"]
+edges:
+  - { id: e1, from: trigger, to: writer }
+  - { id: e2, from: writer, to: style }
+  - { id: e3, from: writer, to: facts }
+  - { id: e4, from: writer, to: legal }
+  - { id: e5, from: style, to: synth }
+  - { id: e6, from: facts, to: synth }
+  - { id: e7, from: legal, to: synth }
+  - { id: e8, from: synth, to: reviewer }
+  - { id: e9, from: reviewer, to: trigger, feedback: true, phase: 0.3 }

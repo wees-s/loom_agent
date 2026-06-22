@@ -1,0 +1,86 @@
+# Research Digest — três pesquisadores paralelos varrem fontes,
+# Synthesizer compõe o digest e o Presenter formata para publicação.
+id: research-digest
+name: Research Digest
+version: 0
+schedule: "Semanal seg 08:00"
+blackboardDir: research
+budget:
+  maxCyclesPerArm: 3
+  maxTokensPerRun: 250000
+  maxUsdPerRun: 4
+  maxTokensPerFlow: 4000000
+  maxUsdPerFlow: 30
+  maxConcurrentAgents: 3
+  convergenceWindow: 3
+nodes:
+  - id: trigger
+    type: Trigger
+    title: Semanal
+    role: Dispara toda segunda às 08:00.
+    model: claude-haiku-4-5
+    prompt: ""
+    linkedContexts: []
+    position: { x: 80, y: 260 }
+    trigger:
+      kind: Agendado
+      freq: "Semanal"
+      weekday: 1
+      time: "08:00"
+  - id: r1
+    type: Researcher
+    title: Fontes acadêmicas
+    role: Varre papers e preprints.
+    model: claude-sonnet-4-6
+    prompt: "Resuma achados acadêmicos relevantes em sources-academic.md."
+    linkedContexts: ["sources-academic.md"]
+    position: { x: 380, y: 120 }
+    produces: ["sources-academic.md"]
+  - id: r2
+    type: Researcher
+    title: Notícias
+    role: Varre notícias e blogs.
+    model: claude-haiku-4-5
+    prompt: "Resuma notícias relevantes em sources-news.md."
+    linkedContexts: ["sources-news.md"]
+    position: { x: 380, y: 260 }
+    produces: ["sources-news.md"]
+  - id: r3
+    type: Researcher
+    title: Comunidade
+    role: Varre fóruns e redes.
+    model: claude-haiku-4-5
+    prompt: "Resuma sinais da comunidade em sources-community.md."
+    linkedContexts: ["sources-community.md"]
+    position: { x: 380, y: 400 }
+    produces: ["sources-community.md"]
+  - id: synth
+    type: Synthesizer
+    title: Sintetizador
+    role: Compõe o digest neutro.
+    model: claude-opus-4-8
+    prompt: |
+      Combine sources-academic.md, sources-news.md e sources-community.md em
+      digest.md. Cite cada item; use apenas os artefatos.
+    linkedContexts: []
+    position: { x: 720, y: 260 }
+    produces: ["digest.md"]
+    contextIsolation: true
+  - id: presenter
+    type: Presenter
+    title: Apresentador
+    role: Formata o digest para publicação.
+    model: claude-sonnet-4-6
+    prompt: "Formate digest.md em digest-final.md pronto para envio."
+    linkedContexts: ["digest.md", "digest-final.md"]
+    position: { x: 1040, y: 260 }
+    produces: ["digest-final.md"]
+edges:
+  - { id: e1, from: trigger, to: r1 }
+  - { id: e2, from: trigger, to: r2 }
+  - { id: e3, from: trigger, to: r3 }
+  - { id: e4, from: r1, to: synth }
+  - { id: e5, from: r2, to: synth }
+  - { id: e6, from: r3, to: synth }
+  - { id: e7, from: synth, to: presenter }
+  - { id: e8, from: presenter, to: trigger, feedback: true, phase: 0.4 }

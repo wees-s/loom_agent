@@ -1,0 +1,28 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# runtime (node:sqlite event log + WAL sidecars)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# runtime spec archives: deleted flows (flow.delete) + per-save version snapshots
+data/deleted/
+data/spec_versions/
+
+# per-flow blackboard scratch
+blackboard/**
+!blackboard/.gitkeep
+
+# engine structured logs
+*.log
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.local
+
+# transient agent scratch scripts (never committed)
+.scratch/

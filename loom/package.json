@@ -1,0 +1,35 @@
+{
+  "name": "loom",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22.23.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter @loom/shared build && pnpm -r --filter @loom/engine build && pnpm -r --filter @loom/web build",
+    "typecheck": "tsc -b",
+    "dev": "concurrently -n engine,web -c green,cyan \"pnpm --filter @loom/engine dev\" \"pnpm --filter @loom/web dev\"",
+    "dev:engine": "pnpm --filter @loom/engine dev",
+    "dev:web": "pnpm --filter @loom/web dev",
+    "seed": "node --experimental-sqlite --import tsx scripts/seed.ts",
+    "test": "pnpm -r test",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@loom/shared": "workspace:*",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

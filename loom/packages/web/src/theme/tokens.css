@@ -1,0 +1,122 @@
+/*
+ * Loom theme tokens — ported VERBATIM from Loom.dc.html <helmet><style>.
+ * Light base lives on [data-loom]; [data-theme="dark"] overrides.
+ * Keep the variable names + keyframes byte-for-byte: the canvas math and the
+ * inline styles ported from the mockup read these exact tokens.
+ */
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+#root {
+  height: 100%;
+}
+
+[data-loom] {
+  --page: radial-gradient(120% 120% at 12% 8%, #f3f7f4 0%, #eef2f5 42%, #eceef3 100%);
+  --glass: rgba(255, 255, 255, 0.6);
+  --canvas-bg: rgba(255, 255, 255, 0.34);
+  --canvas-vignette: rgba(236, 240, 243, 0.5);
+  --input: rgba(245, 248, 246, 0.82);
+  --fill: rgba(80, 110, 100, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.78);
+  --line: rgba(80, 110, 100, 0.12);
+  --line2: rgba(80, 110, 100, 0.16);
+  --grid: rgba(80, 110, 100, 0.11);
+  --text: #1d2a28;
+  --text2: #3a4a46;
+  --text3: #5a6c66;
+  --muted2: #7a8c86;
+  --muted: #9aaca6;
+  --edge-idle: oklch(0.72 0.02 200);
+  --shadow: rgba(30, 55, 45, 0.18);
+  --card-top: rgba(255, 255, 255, 0.7);
+  --blob1: oklch(0.78 0.006 250);
+  --blob2: oklch(0.73 0.006 250);
+  --blob3: oklch(0.76 0.006 250);
+}
+[data-loom][data-theme="dark"] {
+  --page: radial-gradient(120% 120% at 12% 8%, #20242a 0%, #1a1e23 45%, #15181c 100%);
+  --glass: rgba(48, 54, 61, 0.55);
+  --canvas-bg: rgba(34, 39, 45, 0.42);
+  --canvas-vignette: rgba(12, 14, 17, 0.5);
+  --input: rgba(20, 24, 28, 0.55);
+  --fill: rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --line: rgba(255, 255, 255, 0.09);
+  --line2: rgba(255, 255, 255, 0.13);
+  --grid: rgba(255, 255, 255, 0.05);
+  --text: #e9eef0;
+  --text2: #c2cdce;
+  --text3: #9fadaa;
+  --muted2: #879490;
+  --muted: #74817d;
+  --edge-idle: oklch(0.52 0.02 220);
+  --shadow: rgba(0, 0, 0, 0.45);
+  --card-top: rgba(255, 255, 255, 0.06);
+  --blob1: oklch(0.52 0.008 250);
+  --blob2: oklch(0.47 0.008 250);
+  --blob3: oklch(0.50 0.008 250);
+}
+@keyframes blob {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(46px, -46px) scale(1.16);
+  }
+}
+@keyframes floatA {
+  0%,
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(74px, -50px) scale(1.12);
+  }
+  66% {
+    transform: translate(-44px, 36px) scale(1.05);
+  }
+}
+@keyframes floatB {
+  0%,
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(-70px, 52px) scale(1.16);
+  }
+}
+@keyframes softpulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.4);
+  }
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--fill);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}

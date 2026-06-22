@@ -1,0 +1,6 @@
+packages:
+  - "packages/*"
+
+# Allow esbuild's postinstall (needed by vite/vitest/tsx). Everything else stays blocked.
+allowBuilds:
+  esbuild: true

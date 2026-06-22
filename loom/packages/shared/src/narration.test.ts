@@ -62,6 +62,12 @@ describe("narrateEvent", () => {
     expect(r!.artifact).toEqual({ path: "resumo.md", bytes: 2300 });
   });
 
+  it("cycle.awaitingApproval → warn cycle line", () => {
+    const r = line({ type: "cycle.awaitingApproval", flowId: FLOW, cycle: 2, nextArm: 1, at: 1000 });
+    expect(r).toMatchObject({ kind: "cycle", tone: "warn", cycle: 2 });
+    expect(r!.text.toLowerCase()).toContain("aprova");
+  });
+
   it("cycle.converged → neutral cycle line", () => {
     const r = line({ type: "cycle.converged", flowId: FLOW, cycle: 4, reason: "no-new-output", at: 1000 });
     expect(r).toMatchObject({ kind: "cycle", cycle: 4 });

@@ -2,7 +2,7 @@ import type { FlowId, NodeId, EdgeId, RunId } from "./ids.js";
 import type { ModelId } from "./models.js";
 import type { NodeTypeName } from "./catalog.js";
 
-export type FlowState = "rodando" | "agendado" | "ocioso" | "pausado" | "rascunho";
+export type FlowState = "rodando" | "agendado" | "ocioso" | "pausado" | "rascunho" | "aguardando";
 export type RunMode = "run" | "edit";
 
 export type TriggerKind = "Agendado" | "Intervalo" | "Webhook" | "Manual";
@@ -71,6 +71,9 @@ export interface Flow {
    * escape it) instead of the internal blackboardDir sandbox. Unset => sandbox.
    */
   workDir?: string;
+  /** When true, a feedback loop pauses into "aguardando" after each cycle and
+   *  waits for an explicit flow.continue before re-arming (human-in-the-loop). */
+  reviewEachCycle?: boolean;
 }
 
 export type RunStatus =

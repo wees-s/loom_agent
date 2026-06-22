@@ -63,6 +63,7 @@ export const zFlowSpec = z.object({
   blackboardDir: z.string(),
   /** Optional absolute path to a REAL user folder the agents run in (cwd + --add-dir). */
   workDir: z.string().optional(),
+  reviewEachCycle: z.boolean().optional(),
   budget: zFlowBudget,
   nodes: z.array(zAgentNode).min(1).refine(
     (ns) => ns.some((n) => n.type === "Trigger"),
@@ -78,6 +79,7 @@ export const zEditableFlow = z.object({
   name: z.string(),
   /** Optional absolute path to a REAL user folder the agents run in; persisted by spec.save. */
   workDir: z.string().optional(),
+  reviewEachCycle: z.boolean().optional(),
   nodes: z.array(zAgentNode),
   edges: z.array(zEdge),
 });
@@ -90,6 +92,7 @@ export const zClientCommand = z.discriminatedUnion("t", [
   z.object({ t: z.literal("flow.runNow"), cmdId: z.string(), flowId: z.string(), triggerNodeId: z.string().optional() }),
   z.object({ t: z.literal("flow.create"), cmdId: z.string(), name: z.string() }),
   z.object({ t: z.literal("flow.delete"), cmdId: z.string(), flowId: z.string() }),
+  z.object({ t: z.literal("flow.continue"), cmdId: z.string(), flowId: z.string() }),
   z.object({ t: z.literal("spec.save"), cmdId: z.string(), flow: zEditableFlow }),
   z.object({ t: z.literal("setTrigger"), cmdId: z.string(), flowId: z.string(), nodeId: z.string(), trigger: zTriggerConfig }),
   z.object({ t: z.literal("node.subscribe"), cmdId: z.string(), flowId: z.string(), nodeId: z.string() }),

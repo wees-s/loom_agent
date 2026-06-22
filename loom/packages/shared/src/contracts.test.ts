@@ -13,6 +13,27 @@ import {
   makeId,
 } from "./index.js";
 
+describe("flow.continue + reviewEachCycle contracts", () => {
+  it("zClientCommand accepts flow.continue", () => {
+    const r = zClientCommand.safeParse({ t: "flow.continue", cmdId: "c1", flowId: "f1" });
+    expect(r.success).toBe(true);
+  });
+  it("zClientCommand rejects flow.continue without flowId", () => {
+    const r = zClientCommand.safeParse({ t: "flow.continue", cmdId: "c1" });
+    expect(r.success).toBe(false);
+  });
+  it("zFlowSpec accepts an optional reviewEachCycle boolean", () => {
+    const base = {
+      id: "f1", name: "x", version: 1, schedule: "manual", blackboardDir: "f1",
+      budget: { maxCyclesPerArm: 4, maxTokensPerRun: 1, maxUsdPerRun: 1, maxTokensPerFlow: 1, maxUsdPerFlow: 1, maxConcurrentAgents: 1, convergenceWindow: 1 },
+      nodes: [{ id: "n1", type: "Trigger", title: "t", role: "", model: MODEL_CATALOG[0]!.id, prompt: "", position: { x: 0, y: 0 } }],
+      edges: [],
+    };
+    expect(zFlowSpec.safeParse({ ...base, reviewEachCycle: true }).success).toBe(true);
+    expect(zFlowSpec.safeParse(base).success).toBe(true);
+  });
+});
+
 describe("models", () => {
   it("every catalog model has a registry entry and vice-versa", () => {
     const catalogIds = MODEL_CATALOG.map((m) => m.id).sort();

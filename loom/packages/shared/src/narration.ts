@@ -68,6 +68,8 @@ export function narrateEvent(
       return { ...base, cycle: ev.cycle, kind: "cycle", tone: "neutral", text: `Ciclo ${ev.cycle} começou` };
     case "cycle.converged":
       return { ...base, cycle: ev.cycle, kind: "cycle", tone: "neutral", text: `Ciclo ${ev.cycle} convergiu — sem saída nova` };
+    case "cycle.awaitingApproval":
+      return { ...base, cycle: ev.cycle, kind: "cycle", tone: "warn", text: `Ciclo ${ev.cycle} concluído — aguardando sua aprovação` };
     case "cycle.ended": {
       if (ev.status === "done" || ev.status === "converged") return null; // noise / dup
       const tone: NarrationTone = ev.status === "killed" ? "bad" : "warn";

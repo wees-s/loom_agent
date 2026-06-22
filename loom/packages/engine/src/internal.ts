@@ -36,6 +36,7 @@ import type { Blackboard } from "./blackboard.js";
 import type { Terminals } from "./terminals.js";
 import type { Guard } from "./guard.js";
 import type { Runner } from "./runner.js";
+import type { Generator } from "./generator.js";
 import type { SpecStore } from "./spec.js";
 import type { Scheduler } from "./scheduler.js";
 import type { Orchestrator } from "./orchestrator.js";
@@ -236,6 +237,7 @@ export interface EngineDeps {
   spec: SpecStore;
   scheduler: Scheduler;
   orchestrator: Orchestrator;
+  generator: Generator;
 }
 
 // Re-export the domain Run/Terminal so engine modules can import run-shaped

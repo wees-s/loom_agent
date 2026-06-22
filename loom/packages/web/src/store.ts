@@ -19,6 +19,8 @@ import type {
   EdgeId,
   NodeTypeName,
   ModelId,
+  NarrationLine,
+  NarrationCtx,
 } from "@loom/shared";
 import {
   MODEL_CATALOG,
@@ -28,6 +30,7 @@ import {
   asEdgeId,
   makeId,
   typeDef,
+  narrateEvent,
 } from "@loom/shared";
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -95,6 +98,9 @@ export interface LoomState {
   // ── log strip + cycle ──
   logs: LogEntry[];
   cycle: number;
+
+  // ── storyline (human narrative; pure projection of the event log) ──
+  storyline: NarrationLine[];
 
   // ── terminal output buffers (term://N → text) ──
   terminalData: Record<string, string>;
@@ -198,6 +204,9 @@ export function composeSchedule(t: TriggerConfig | undefined): string {
 /** Default model id for new agents (mockup default: "Claude Sonnet 4.5"). */
 const DEFAULT_MODEL: ModelId = "claude-sonnet-4-6";
 
+/** Max Storyline lines retained (bounded buffer; oldest dropped). */
+const STORYLINE_MAX = 300;
+
 function makeCmdId(): string {
   return makeId("cmd_");
 }
@@ -242,6 +251,7 @@ function foldEvent(state: LoomState, ev: LoomEvent, ts: number): Partial<LoomSta
         patch.selectedEdgeId = null;
         patch.activeNodeIds = new Set<string>();
         patch.activeEdgeIds = new Set<string>();
+        patch.storyline = [];
         patch.cycle = fallback ? (state.flowsById[fallback.id]?.cycle ?? 0) : 0;
       }
       break;
@@ -364,6 +374,8 @@ export const useLoomStore = create<LoomState>((set, get) => ({
   logs: [],
   cycle: 0,
 
+  storyline: [],
+
   terminalData: {},
 
   selectedTerminalId: null,
@@ -426,6 +438,7 @@ export const useLoomStore = create<LoomState>((set, get) => ({
         let working = get();
         let maxSeq = working.lastSeq;
         let activeTerm: string | null = null;
+        let storyline = working.storyline;
         const events = [...msg.events].sort((a, b) => a.seq - b.seq);
         for (const stored of events) {
           if (stored.seq <= working.lastSeq) continue; // already folded
@@ -439,6 +452,21 @@ export const useLoomStore = create<LoomState>((set, get) => ({
           }
           const patch = foldEvent(working, ev, stored.ts);
           working = { ...working, ...patch } as LoomState;
+          // Storyline: a pure projection of the same event stream.
+          const ctx: NarrationCtx = {
+            node: (id) => {
+              const fid = working.selectedFlowId;
+              const flow = fid ? working.flowsById[fid] : undefined;
+              const n = flow?.nodes.find((x) => x.id === id);
+              return n ? { title: n.title, type: n.type } : undefined;
+            },
+            runNode: (rid) => working.runNode[rid],
+          };
+          const nl = narrateEvent(ev, stored.seq, stored.ts, ctx);
+          if (nl) {
+            const stamped = nl.cycle === -1 ? { ...nl, cycle: working.cycle } : nl;
+            storyline = [...storyline, stamped].slice(-STORYLINE_MAX);
+          }
           if (stored.seq > maxSeq) maxSeq = stored.seq;
         }
         set({
@@ -452,6 +480,7 @@ export const useLoomStore = create<LoomState>((set, get) => ({
           logs: working.logs,
           cycle: working.cycle,
           running: working.running,
+          storyline,
           // selection can change when a flow is removed (flow.removed clears it).
           selectedFlowId: working.selectedFlowId,
           selectedNodeId: working.selectedNodeId,
@@ -610,9 +639,10 @@ export const useLoomStore = create<LoomState>((set, get) => ({
       selectedEdgeId: null,
       cycle: flow?.cycle ?? 0,
       running: flow ? flow.state === "rodando" : get().running,
-      // switching flows clears live overlays for the previous flow
+      // switching flows clears live overlays + narrative for the previous flow
       activeNodeIds: new Set<string>(),
       activeEdgeIds: new Set<string>(),
+      storyline: [],
     });
     // ask the engine to stream this flow (resume from our cursor)
     if (get().connection === "live") sendCommand({ t: "subscribe", flowId, sinceSeq: lastSeq });
@@ -775,6 +805,8 @@ export const selectSelectedEdge = (s: LoomState): Edge | null => {
 /** "none" | "node" | "edge" — drives which inspector panel renders. */
 export const selectInspectorKind = (s: LoomState): "none" | "node" | "edge" =>
   s.selectedEdgeId ? "edge" : s.selectedNodeId ? "node" : "none";
+
+export const selectStoryline = (s: LoomState): NarrationLine[] => s.storyline;
 
 export const selectIsNodeActive = (s: LoomState, nodeId: string): boolean => s.activeNodeIds.has(nodeId);
 export const selectIsEdgeActive = (s: LoomState, edgeId: string): boolean => s.activeEdgeIds.has(edgeId);

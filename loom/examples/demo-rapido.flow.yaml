@@ -9,9 +9,11 @@ blackboardDir: demo-rapido
 budget:
   maxCyclesPerArm: 1
   maxTokensPerRun: 120000
-  maxUsdPerRun: 1
+  # $1 era baixo demais: o pior-caso de UM run Sonnet é ~$1,056, então qualquer
+  # nó Sonnet (modelo padrão de agente novo) era NEGADO pelo guard. $2 = DEFAULT.
+  maxUsdPerRun: 2
   maxTokensPerFlow: 500000
-  maxUsdPerFlow: 5
+  maxUsdPerFlow: 10
   maxConcurrentAgents: 1
   convergenceWindow: 2
 nodes:

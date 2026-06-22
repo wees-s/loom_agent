@@ -3,15 +3,17 @@
 # terminal. Tire o fake e ele roda um claude haiku de verdade a cada 30s.
 id: demo-rapido
 name: Demo rápido (30s)
-version: 0
+version: 1
 schedule: "a cada 30 s"
 blackboardDir: demo-rapido
 budget:
   maxCyclesPerArm: 1
   maxTokensPerRun: 120000
-  maxUsdPerRun: 1
+  # $1 era baixo demais: o pior-caso de UM run Sonnet é ~$1,056, então qualquer
+  # nó Sonnet (modelo padrão de agente novo) era NEGADO pelo guard. $2 = DEFAULT.
+  maxUsdPerRun: 2
   maxTokensPerFlow: 500000
-  maxUsdPerFlow: 5
+  maxUsdPerFlow: 10
   maxConcurrentAgents: 1
   convergenceWindow: 2
 nodes:
@@ -22,8 +24,12 @@ nodes:
     model: claude-haiku-4-5
     prompt: ""
     linkedContexts: []
-    position: { x: 100, y: 220 }
-    trigger: { kind: Intervalo, interval: "30 s" }
+    position:
+      x: 99.10714285714286
+      y: 220
+    trigger:
+      kind: Intervalo
+      interval: 30 s
   - id: agente
     type: Analyst
     title: Agente
@@ -32,8 +38,30 @@ nodes:
     prompt: |
       Escreva (ou sobrescreva) o arquivo nota.md com UMA frase curta dizendo
       a hora atual. Não escreva mais nada.
-    linkedContexts: ["nota.md"]
-    position: { x: 400, y: 220 }
-    produces: ["nota.md"]
+    linkedContexts:
+      - nota.md
+    position:
+      x: 400
+      y: 220
+    produces:
+      - nota.md
+  - id: n_fwmf8yx
+    type: Executor
+    title: Executor
+    role: Descreva o agente
+    model: claude-sonnet-4-6
+    prompt: escreve no nota.md "sou o segundo agente"
+    linkedContexts: []
+    position:
+      x: 694.0588235294118
+      y: 239.66748218274654
+    schedule: ao receber do agente de análise
+    contextIsolation: false
 edges:
-  - { id: e1, from: trigger, to: agente }
+  - id: e1
+    from: trigger
+    to: agente
+  - id: e_e7uqzy7
+    from: agente
+    to: n_fwmf8yx
+    phase: 5.991117816444191

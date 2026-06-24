@@ -36,6 +36,8 @@ export interface EditableFlow {
   name: string;
   /** Optional absolute path to a REAL user folder the agents run in; persisted by spec.save. */
   workDir?: string;
+  /** Persisted review-each-cycle preference (human-in-the-loop checkpoint). */
+  reviewEachCycle?: boolean;
   nodes: AgentNode[];
   edges: Edge[];
 }
@@ -49,6 +51,8 @@ export type ClientCommand =
   | { t: "flow.runNow"; cmdId: string; flowId: FlowId; triggerNodeId?: NodeId }
   | { t: "flow.create"; cmdId: string; name: string }
   | { t: "flow.delete"; cmdId: string; flowId: FlowId }
+  | { t: "flow.continue"; cmdId: string; flowId: FlowId }
+  | { t: "flow.generate"; cmdId: string; prompt: string }
   | { t: "spec.save"; cmdId: string; flow: EditableFlow }
   | { t: "setTrigger"; cmdId: string; flowId: FlowId; nodeId: NodeId; trigger: TriggerConfig }
   | { t: "node.subscribe"; cmdId: string; flowId: FlowId; nodeId: NodeId }

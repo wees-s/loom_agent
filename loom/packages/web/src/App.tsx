@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, type ErrorInfo, type ReactNode } from "react";
-import { useLoomStore, selectCurrentFlow } from "./store";
+import { useLoomStore, selectCurrentFlow, isActiveFlowState } from "./store";
 import { startWsClient, type LoomWsClient } from "./wsClient";
 
 import { TopBar } from "./components/TopBar";
@@ -7,6 +7,7 @@ import { LeftRail } from "./components/LeftRail";
 import { CanvasGraphContainer } from "./components/CanvasGraph";
 import { CanvasOverlay } from "./components/CanvasOverlay";
 import { Inspector } from "./components/Inspector";
+import { Storyline } from "./components/Storyline";
 import { LogStripConnected } from "./components/LogStrip";
 import { TerminalPanel } from "./components/TerminalPanel";
 
@@ -174,6 +175,7 @@ function AppShell() {
   const kill = useLoomStore((s) => s.kill);
   const selectedFlowId = useLoomStore((s) => s.selectedFlowId);
   const toggleTheme = useLoomStore((s) => s.toggleTheme);
+  const saveSpec = useLoomStore((s) => s.saveSpec);
 
   const wsRef = useRef<LoomWsClient | null>(null);
 
@@ -201,7 +203,11 @@ function AppShell() {
   // No flow selected → nothing to run (the button renders disabled, see canRun).
   const onTogglePlay = () => {
     if (!selectedFlowId) return;
-    if (running) {
+    // "active" includes armed-but-idle scheduled flows + awaiting checkpoints —
+    // not just "rodando" — so the button can STOP a flow that is between interval
+    // fires (previously impossible: it showed play and re-fired instead).
+    const active = isActiveFlowState(flow?.state);
+    if (active || running) {
       pause();
       kill();
     } else {
@@ -239,12 +245,14 @@ function AppShell() {
           cycle={cycle}
           mode={mode}
           running={running}
+          flowState={flow?.state}
           theme={theme}
           connection={connection}
           canRun={!!selectedFlowId}
           onSetMode={setMode}
           onTogglePlay={onTogglePlay}
           onToggleTheme={toggleTheme}
+          onSaveSpec={saveSpec}
         />
 
         {/* ── Middle row: LeftRail · Canvas · Inspector ── */}
@@ -259,6 +267,7 @@ function AppShell() {
           </div>
 
           <Inspector />
+          <Storyline />
         </div>
 
         {/* ── Live terminal drawer (collapses when no terminal is selected) ── */}

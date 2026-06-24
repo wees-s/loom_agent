@@ -18,6 +18,7 @@ import { createBlackboard } from "./blackboard.js";
 import { createSpecStore } from "./spec.js";
 import { createGuard } from "./guard.js";
 import { createRunner } from "./runner.js";
+import { createGenerator } from "./generator.js";
 import { createOrchestrator } from "./orchestrator.js";
 import { createScheduler } from "./scheduler.js";
 import { createBridge, type Bridge } from "./bridge.js";
@@ -86,6 +87,9 @@ export function buildEngine(config: EngineConfig): EngineDeps {
   //    mode launches claude inside a tmux pane via the terminals manager.
   const runner = createRunner(config.runnerMode, guard, blackboard, terminals, emit);
 
+  // NL flow generator — inherits the runner mode (fake → zero-cost canned flow).
+  const generator = createGenerator(config.runnerMode, emit);
+
   // Wire the guard's kill path to tmux kill-session a flow's panes (terminal
   // mode's real kill target). Injected post-construction to avoid a cycle.
   guard.setTerminalDisposer((flowId) => terminals.disposeFlow(flowId));
@@ -116,6 +120,7 @@ export function buildEngine(config: EngineConfig): EngineDeps {
     spec,
     scheduler,
     orchestrator,
+    generator,
   };
 }
 
@@ -175,6 +180,7 @@ export async function main(): Promise<void> {
     deps.guard,
     deps.terminals,
     deps.orchestrator,
+    deps.generator,
     deps.emit,
   );
 

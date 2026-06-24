@@ -48,6 +48,9 @@ function makeFakeOrchestrator(): Orchestrator & { started: { flowId: string; cau
     },
     recoverOrphans: async () => {},
     isRunning: () => false,
+    continueFlow: async () => null,
+    isAwaiting: () => false,
+    clearAwaiting: () => {},
   };
 }
 

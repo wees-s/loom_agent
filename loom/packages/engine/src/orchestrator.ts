@@ -30,6 +30,7 @@ import {
   type Edge,
   type RunStatus,
   type ModelId,
+  type FlowState,
 } from "@loom/shared";
 import type { CycleCause, Emit, RunCtx, RunResult } from "./internal.js";
 import type { EventLog } from "./eventlog.js";
@@ -52,7 +53,8 @@ export type CycleOutcome =
   | { status: "done"; cycle: number }
   | { status: "converged"; cycle: number; reason: "no-new-output" }
   | { status: "stopped"; cycle: number; reason: string }
-  | { status: "killed"; cycle: number };
+  | { status: "killed"; cycle: number }
+  | { status: "awaiting"; cycle: number };
 
 export interface Orchestrator {
   /** Pure planner: build the feedback-cut DAG + Kahn layers for a flow. */
@@ -74,6 +76,14 @@ export interface Orchestrator {
 
   /** True while a cycle is in flight for the flow (scheduler no-overlap guard). */
   isRunning(flowId: FlowId): boolean;
+
+  /** Human-in-the-loop: resume a flow paused at a cycle checkpoint. Returns the
+   *  next cycle's outcome, or null if nothing was awaiting. */
+  continueFlow(flowId: FlowId): Promise<CycleOutcome | null>;
+  /** True while a flow is paused at a cycle checkpoint (scheduler no-overlap). */
+  isAwaiting(flowId: FlowId): boolean;
+  /** Drop a pending checkpoint continuation (pause/kill). */
+  clearAwaiting(flowId: FlowId): void;
 }
 
 // -----------------------------------------------------------------------------
@@ -97,6 +107,16 @@ function isOkStatus(s: RunStatus): boolean {
   return s === "ok";
 }
 
+/** A flow with an auto-firing trigger (Agendado/Intervalo) keeps firing while
+ *  armed — so its idle state is "agendado" (scheduled), not "ocioso" (stopped).
+ *  This is what lets the UI show "AGENDADO" + a STOP button instead of lying
+ *  that an armed interval flow is idle/stopped. */
+export function hasScheduledTrigger(flow: Flow): boolean {
+  return flow.nodes.some(
+    (n) => n.trigger?.kind === "Agendado" || n.trigger?.kind === "Intervalo",
+  );
+}
+
 export function createOrchestrator(
   eventlog: EventLog,
   guard: Guard,
@@ -108,6 +128,9 @@ export function createOrchestrator(
 ): Orchestrator {
   /** Flows with a cycle currently in flight (scheduler no-overlap guard). */
   const running = new Set<string>();
+
+  /** Flows paused at a cycle checkpoint → the approved next arm to resume with. */
+  const pendingApprovals = new Map<string, { arm: number }>();
 
   // ---------------------------------------------------------------------------
   // PLAN — feedback-cut DAG + Kahn layering.
@@ -585,7 +608,7 @@ export function createOrchestrator(
             );
             if (edge) emit({ type: "edge.fired", flowId: f.id, edgeId: edge.id, cycle });
           }
-          // Close out THIS cycle as done before recursing into the next arm.
+          // Close out THIS cycle as done before continuing.
           emit({
             type: "cycle.ended",
             flowId: f.id,
@@ -594,8 +617,25 @@ export function createOrchestrator(
             totalUsd: cycleSpend(f.id),
             at: Date.now(),
           });
-          // Recurse on the next arm (running flag stays set: re-entrant call).
-          return await startCycle(f, "feedback", arm + 1);
+
+          // HUMAN-IN-THE-LOOP checkpoint: if the flow reviews each cycle, pause
+          // here (the next arm is already admitted by the guard) and wait for an
+          // explicit flow.continue. Strictly more conservative — we only DEFER.
+          if (f.reviewEachCycle === true) {
+            pendingApprovals.set(f.id as string, { arm: next.value.arm });
+            emit({
+              type: "cycle.awaitingApproval",
+              flowId: f.id,
+              cycle,
+              nextArm: next.value.arm,
+              at: Date.now(),
+            });
+            emit({ type: "flow.stateChanged", flowId: f.id, state: "aguardando" });
+            return { status: "awaiting", cycle };
+          }
+
+          // Auto mode: recurse on the next arm (running flag stays set).
+          return await startCycle(f, "feedback", next.value.arm);
         }
 
         // Denied: translate the guard's reason into a converged/stopped outcome.
@@ -615,7 +655,7 @@ export function createOrchestrator(
             totalUsd: cycleSpend(f.id),
             at: Date.now(),
           });
-          emit({ type: "flow.stateChanged", flowId: f.id, state: "ocioso" });
+          emit({ type: "flow.stateChanged", flowId: f.id, state: idleState(f) });
           return { status: "converged", cycle, reason: "no-new-output" };
         }
 
@@ -628,7 +668,7 @@ export function createOrchestrator(
           totalUsd: cycleSpend(f.id),
           at: Date.now(),
         });
-        emit({ type: "flow.stateChanged", flowId: f.id, state: "ocioso" });
+        emit({ type: "flow.stateChanged", flowId: f.id, state: idleState(f) });
         if (next.reason === "flow_killed") return { status: "killed", cycle };
         return { status: "stopped", cycle, reason: `${next.reason}: ${next.detail}` };
       }
@@ -642,11 +682,17 @@ export function createOrchestrator(
         totalUsd: cycleSpend(f.id),
         at: Date.now(),
       });
-      emit({ type: "flow.stateChanged", flowId: f.id, state: "ocioso" });
+      emit({ type: "flow.stateChanged", flowId: f.id, state: idleState(f) });
       return { status: "done", cycle };
     } finally {
       if (!isReentrant) running.delete(flowKey);
     }
+  }
+
+  /** The post-cycle idle state: "agendado" if the flow is armed AND auto-fires
+   *  (so it WILL spend again), else "ocioso". Drives the honest UI status/button. */
+  function idleState(f: Flow): FlowState {
+    return guard.isFlowArmed(f.id) && hasScheduledTrigger(f) ? "agendado" : "ocioso";
   }
 
   /** Best-effort total spend for the flow (for cycle.ended.totalUsd). */
@@ -723,7 +769,38 @@ export function createOrchestrator(
     return running.has(flowId as string);
   }
 
-  return { plan, startCycle, recoverOrphans, isRunning };
+  // ---------------------------------------------------------------------------
+  // HUMAN-IN-THE-LOOP — cycle checkpoint resume / cancel.
+  // ---------------------------------------------------------------------------
+
+  function isAwaiting(flowId: FlowId): boolean {
+    return pendingApprovals.has(flowId as string);
+  }
+
+  function clearAwaiting(flowId: FlowId): void {
+    pendingApprovals.delete(flowId as string);
+  }
+
+  async function continueFlow(flowId: FlowId): Promise<CycleOutcome | null> {
+    const pending = pendingApprovals.get(flowId as string);
+    if (!pending) return null;
+    pendingApprovals.delete(flowId as string);
+    const flow = spec.get(flowId);
+    if (!flow) return null;
+    emit({ type: "flow.stateChanged", flowId, state: "rodando" });
+    // Resume the arm the guard already admitted (no re-admission → no double count).
+    return startCycle(flow, "feedback", pending.arm);
+  }
+
+  return {
+    plan,
+    startCycle,
+    recoverOrphans,
+    isRunning,
+    continueFlow,
+    isAwaiting,
+    clearAwaiting,
+  };
 }
 
 // Re-export id coercions used in tests that drive the orchestrator with raw ids.

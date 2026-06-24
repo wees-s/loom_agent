@@ -8,10 +8,20 @@ single Node **engine** that runs flows defined as graphs of agents, plus a React
 monorepo (`@loom/shared`, `@loom/engine`, `@loom/web`); it runs from WSL and is
 viewed in the Windows browser. No Rust, no Tauri — just a web app.
 
-Each agent node shells out to the **already-authenticated Windows `claude` CLI**
-(`--output-format stream-json`), one child process per run, so there is no new
-login and no API key to manage. A run's real token usage and `costUsd` flow back
-over a typed WebSocket and are projected onto the canvas in real time.
+Loom is **terminal-native**: each agent run is a **real `claude` session running
+inside a tmux pane** (one pane per `(flow,node)`), streamed live to the canvas so
+you watch the actual terminal each agent used. It drives the
+**already-authenticated Windows `claude` CLI** (default **text** output —
+readable in a pane, *not* `stream-json`), one session per run, so there is no new
+login and no API key to manage.
+
+> **Cost-metering trade-off (read this):** default text output means there is
+> **no live token/cost meter** in terminal mode — a run reports coarse/zero cost.
+> Cost is therefore bounded by the **pre-spend hard bounds**, not by a live meter:
+> the per-run worst-case admission, `maxCyclesPerArm`, `--max-turns`, and the
+> per-run wall-clock timeout. The per-*flow* USD/token cap does **not** accumulate
+> across cycles in terminal mode — see [Safety model](#safety-model). (The `fake`
+> runner *does* meter, for zero-cost dry runs and tests.)
 
 ## What the UI looks like (screenshot-free)
 
@@ -128,25 +138,50 @@ interval timer, no webhook fire). Only `flow.play` / `flow.runNow` arm a flow;
 `flow.pause` / `flow.kill` disarm it. So a restart never auto-runs anything, and a
 freshly-loaded flow cannot spend a cent until you press play.
 
-**Hard bounds (the ones that actually cap cost):**
+**Hard bounds (the ones that actually cap cost in terminal mode):**
 
 1. **`maxCyclesPerArm`** — a hard ceiling on feedback re-arms within one trigger
-   firing. Guarantees termination of a feedback loop.
-2. **Per-flow caps (USD *and* tokens)** — enforced by **pre-spend admission**:
-   `committedUsd + reservations-in-flight + worstCaseRunCost(model) ≤ cap`
-   *before* any spawn. The per-flow cap can only be exceeded by the estimation
-   error of a single in-flight run, never by a loop. `committedUsd/Tokens` is
-   **rehydrated from the event log on boot**, so the lifetime per-flow ceiling
-   **survives an engine restart** (a restart does not reset spend to zero).
-3. **Live per-run abort** — an `AbortController` wired into the token meter kills
-   a run the instant it crosses its own cap; crossing a *flow* cap kills the flow.
-4. **Kill switch** — `--max-turns` on the CLI (BELT), a per-run wall-clock
-   timeout (SUSPENDERS), and a three-pronged kill (tree-kill SIGKILL + POSIX
-   `kill(-pgid)` + `taskkill.exe /T /F`) with post-kill verification.
+   firing. Guarantees termination of a feedback loop. **In terminal mode this is
+   the primary lifetime-cost bound** (see #2 for why the per-flow cap is not).
+2. **Per-run worst-case admission (USD *and* tokens)** — enforced **pre-spend**,
+   no metering required: a run is admitted only if
+   `worstCaseRunCost(model) ≤ maxUsdPerRun` (and the token equivalent), where
+   `worstCaseRunCost = maxOutputTokens·outputPrice + budgetedInput`. This caps the
+   cost of any *single* run even in terminal mode (e.g. with the default
+   `maxUsdPerRun = $2`, an Opus run is denied outright because its worst case is
+   ~$3.4). **Lifetime ceiling per firing ≈ `maxCyclesPerArm × runs-per-cycle ×
+   maxUsdPerRun`** (in practice lower, since `--max-turns` and the wall-clock
+   timeout usually settle a run well under its worst case).
+3. **Kill switch** — `--max-turns` on the CLI (BELT), a per-run wall-clock
+   timeout (SUSPENDERS), `tmux kill-session` on the flow's panes (the real kill
+   target in terminal mode), plus the legacy three-pronged PID kill (tree-kill
+   SIGKILL + POSIX `kill(-pgid)` + `taskkill.exe /T /F`) with post-kill verification.
+
+**⚠️ What is NOT an active bound in terminal mode:**
+
+- **The per-*flow* USD/token cap does not accumulate across cycles.** Because
+  terminal mode has no live token meter, finished runs commit `costUsd = 0`, so
+  `committedUsd` never grows and the rehydrated lifetime ceiling stays at zero.
+  The per-flow admission check (`committed + reservations-in-flight + worstCase ≤
+  cap`) therefore only bounds the **worst case of runs concurrently in flight**,
+  not lifetime spend. Treat `maxUsdPerFlow` as a concurrency-headroom guard, not a
+  lifetime budget; bound lifetime cost with `maxCyclesPerArm` + `maxUsdPerRun` (#1,
+  #2) instead.
+- **Live per-run abort is inert.** The `AbortController` is wired to the token
+  meter, but no `run.token` events are emitted in terminal mode, so a run is never
+  aborted mid-flight by crossing its cap — it is bounded by `--max-turns` and the
+  wall-clock timeout. (Both the per-flow accumulation and the live abort are fully
+  active in the `fake` runner and the legacy stream-json path.)
+
+> **Follow-up (planned):** restore live metering by parsing the real session's
+> final cost/usage (reusing `streamParser`) and calling `guard.meterToken`, which
+> would re-activate both the per-flow accumulation and the live per-run abort.
+> Deferred because it touches the WSL→Windows runtime path and needs validation
+> against a real authenticated `claude`. See `review_loom.md` §7.1.
 
 **Advisory (not an independent bound):** convergence detection stops a loop early
-when N cycles produce no new artifact hash. It is **redundant** to bounds (1) and
-(3) and can be defeated by non-deterministic content — never rely on it alone.
+when N cycles produce no new artifact hash. It is **redundant** to bound (1) and
+can be defeated by non-deterministic content — never rely on it alone.
 
 ### Honest caveat: kill across the WSL→Windows boundary is NOT guaranteed
 
@@ -162,13 +197,14 @@ is harmless on the happy path (it always exits via close/abort/watchdog).
 ### Known issues (LOW — documented, not fixed)
 
 - **Webhook has no auth.** `/webhook/:flowId/:event` is unauthenticated. Cost
-  amplification is bounded by the guard (per-flow caps + `maxCyclesPerArm`), but
-  anyone on the local network can trigger flows. Add a token/HMAC before exposing
-  beyond localhost.
-- **`flow.play` after a budget kill** resumes against the near-cap rehydrated
-  meter, so the next run may be **denied immediately** at admission. Safe (never
-  spends past the cap), just potentially confusing — the UI should warn when near
-  the ceiling.
+  amplification is bounded by the guard (`maxCyclesPerArm` + the per-run worst-case
+  cap), but anyone on the local network can trigger flows. Add a token/HMAC before
+  exposing beyond localhost.
+- **`flow.play` after a budget kill** (relevant once live metering is restored —
+  see §7.1 follow-up): would resume against the near-cap rehydrated meter, so the
+  next run may be **denied immediately** at admission. Safe (never spends past the
+  cap), just potentially confusing — the UI should warn when near the ceiling. (In
+  terminal mode today the per-flow meter stays at zero, so this does not bite yet.)
 - **`RunCtx.lease` is trusted by convention.** The runner assumes the lease in
   `RunCtx` is valid (only the orchestrator builds `RunCtx`, only the guard mints
   the lease). It is not type-enforced (the brand is phantom). Acceptable because

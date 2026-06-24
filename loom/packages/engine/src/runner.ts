@@ -98,15 +98,21 @@ function totalTokens(u: TokenUsage): number {
   );
 }
 
-/** First non-empty line, trimmed and truncated, for the recent-runs label. */
-function summarize(text: string): string | undefined {
+/** Last meaningful line of pane text (the agent's conclusion), ANSI-stripped,
+ *  trimmed and truncated, for the recent-runs / Storyline label. Exported for
+ *  unit testing. */
+export function summarize(text: string): string | undefined {
   // Strip ANSI escapes so the summary stays readable.
   const noAnsi = text.replace(/\x1b\[[0-9;]*m/g, "");
-  const cleaned = noAnsi.replace(/\s+/g, " ").trim();
-  if (!cleaned) return undefined;
-  return cleaned.length > SUMMARY_MAX
-    ? cleaned.slice(0, SUMMARY_MAX - 1).trimEnd() + "…"
-    : cleaned;
+  const lines = noAnsi
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && l !== "$" && !l.startsWith("$ "));
+  const last = lines[lines.length - 1];
+  if (!last) return undefined;
+  return last.length > SUMMARY_MAX
+    ? last.slice(0, SUMMARY_MAX - 1).trimEnd() + "…"
+    : last;
 }
 
 /**

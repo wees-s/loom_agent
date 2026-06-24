@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import type { TopBarProps } from "../contracts";
+import { isActiveFlowState } from "../store";
 
 /* ════════════════════════════════════════════════════════════════════════
  * TopBar — glass top bar. Ported 1:1 from Loom.dc.html (lines 59-118):
@@ -54,7 +55,7 @@ const TAB_OFF: CSSProperties = {
 };
 
 export function TopBar(props: TopBarProps) {
-  const { flowName, cycle, mode, running, theme, connection, canRun, onSetMode, onTogglePlay, onToggleTheme } = props;
+  const { flowName, cycle, mode, running, flowState, theme, connection, canRun, onSetMode, onTogglePlay, onToggleTheme, onSaveSpec } = props;
 
   const edit = mode === "edit";
   const isDark = theme === "dark";
@@ -79,11 +80,31 @@ export function TopBar(props: TopBarProps) {
   const accentGlow = alpha(ACCENT, 0.55);
 
   // Status pill (run mode) — DCLogic statusBg/Border/Dot/Text/Anim.
+  // "active" = the flow will spend if left alone (running OR scheduled OR
+  // awaiting) → the button must offer STOP. Falls back to `running` when no
+  // flowState is provided (older callers).
+  const active = flowState ? isActiveFlowState(flowState) : running;
+
   const statusBg = running ? alpha(ACCENT, 0.12) : "var(--fill)";
   const statusBorder = running ? alpha(ACCENT, 0.25) : "var(--line)";
   const statusDot = running ? ACCENT : "var(--muted)";
   const statusText = running ? alpha(ACCENT, 0.95) : "#7a8c86";
-  const statusLabel = running ? "EM EXECUÇÃO" : "PAUSADO";
+  // HONEST label: reflect the flow's real state. The old binary (running ?
+  // "EM EXECUÇÃO" : "PAUSADO") lied — an armed-but-idle flow firing on an
+  // interval read as "PAUSADO" while it kept spending every cycle.
+  const STATE_LABEL: Record<string, string> = {
+    rodando: "EM EXECUÇÃO",
+    agendado: "AGENDADO",
+    aguardando: "AGUARDANDO",
+    pausado: "PAUSADO",
+    ocioso: "OCIOSO",
+    rascunho: "RASCUNHO",
+  };
+  const statusLabel = flowState
+    ? (STATE_LABEL[flowState] ?? flowState.toUpperCase())
+    : running
+      ? "EM EXECUÇÃO"
+      : "OCIOSO";
 
   return (
     <div
@@ -228,12 +249,12 @@ export function TopBar(props: TopBarProps) {
             title={
               !canRun
                 ? "Selecione ou crie um fluxo primeiro"
-                : running
+                : active
                   ? "Parar o fluxo"
                   : "Iniciar agora (executa + agenda)"
             }
           >
-            {running ? (
+            {active ? (
               <svg width="14" height="14" viewBox="0 0 14 14">
                 <rect x="2.5" y="2" width="3.2" height="10" rx="1" fill="#fff" />
                 <rect x="8.3" y="2" width="3.2" height="10" rx="1" fill="#fff" />
@@ -272,6 +293,39 @@ export function TopBar(props: TopBarProps) {
             MODO EDIÇÃO
           </span>
         </div>
+      )}
+
+      {/* edit-mode: persist topology to the engine (without this, edits stay local) */}
+      {edit && (
+        <button
+          type="button"
+          onClick={onSaveSpec}
+          disabled={!canRun}
+          title={canRun ? "Salvar o fluxo (versiona a spec no engine)" : "Selecione um fluxo primeiro"}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "7px 14px",
+            border: "none",
+            borderRadius: 11,
+            cursor: canRun ? "pointer" : "not-allowed",
+            opacity: canRun ? 1 : 0.45,
+            background: ACCENT,
+            color: "#fff",
+            fontSize: 12.5,
+            fontWeight: 600,
+            boxShadow: canRun ? `0 6px 18px -6px ${accentGlow},inset 0 1px 0 rgba(255,255,255,0.3)` : "none",
+          }}
+          onMouseEnter={(e) => { if (canRun) e.currentTarget.style.filter = "brightness(1.06)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 2.5h7.5L12 5v6.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5Z" stroke="#fff" strokeWidth="1.3" />
+            <path d="M4.5 2.5v3h4v-3M4.5 12V8.5h5V12" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+          Salvar
+        </button>
       )}
 
       {/* engine connection indicator */}

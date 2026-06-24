@@ -19,6 +19,9 @@ import type {
   EdgeId,
   NodeTypeName,
   ModelId,
+  NarrationLine,
+  NarrationCtx,
+  FlowState,
 } from "@loom/shared";
 import {
   MODEL_CATALOG,
@@ -28,6 +31,7 @@ import {
   asEdgeId,
   makeId,
   typeDef,
+  narrateEvent,
 } from "@loom/shared";
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -96,6 +100,9 @@ export interface LoomState {
   logs: LogEntry[];
   cycle: number;
 
+  // ── storyline (human narrative; pure projection of the event log) ──
+  storyline: NarrationLine[];
+
   // ── terminal output buffers (term://N → text) ──
   terminalData: Record<string, string>;
 
@@ -110,11 +117,15 @@ export interface LoomState {
   zoom: number;
   pan: { x: number; y: number };
   railOpen: boolean;
+  /** Storyline panel visibility (default open). */
+  storylineOpen: boolean;
   /** play/pause is the projected runtime state of the selected flow. */
   running: boolean;
 
   // ── add-agent panel ──
   adding: boolean;
+  /** True while an NL flow generation (flow.generate) is in flight. */
+  generating: boolean;
   draft: AddAgentDraft | null;
   advOpen: boolean;
   typeQuery: string;
@@ -137,9 +148,15 @@ export interface LoomState {
   kill: () => void;
   runNow: (triggerNodeId?: NodeId) => void;
   createFlow: (name: string) => void;
+  /** NL authoring: generate a full flow from a description (flow.generate). */
+  generateFlow: (prompt: string) => void;
   deleteFlow: (flowId: FlowId) => void;
   saveSpec: () => void;
   setWorkDir: (workDir: string) => void;
+  /** Human-in-the-loop: resume a flow paused at a cycle checkpoint. */
+  continue: () => void;
+  /** Toggle "review each cycle" for the selected flow (persisted via spec.save). */
+  setReviewEachCycle: (on: boolean) => void;
   setTrigger: (nodeId: NodeId, trigger: TriggerConfig) => void;
   openTerminal: (terminal: string) => void;
   selectTerminal: (terminalId: string | null) => void;
@@ -154,6 +171,7 @@ export interface LoomState {
   setMode: (mode: RunMode) => void;
   toggleTheme: () => void;
   setRailOpen: (open: boolean) => void;
+  toggleStoryline: () => void;
   setZoom: (zoom: number) => void;
   zoomBy: (delta: number) => void;
   setPan: (pan: { x: number; y: number }) => void;
@@ -197,6 +215,9 @@ export function composeSchedule(t: TriggerConfig | undefined): string {
 
 /** Default model id for new agents (mockup default: "Claude Sonnet 4.5"). */
 const DEFAULT_MODEL: ModelId = "claude-sonnet-4-6";
+
+/** Max Storyline lines retained (bounded buffer; oldest dropped). */
+const STORYLINE_MAX = 300;
 
 function makeCmdId(): string {
   return makeId("cmd_");
@@ -242,6 +263,7 @@ function foldEvent(state: LoomState, ev: LoomEvent, ts: number): Partial<LoomSta
         patch.selectedEdgeId = null;
         patch.activeNodeIds = new Set<string>();
         patch.activeEdgeIds = new Set<string>();
+        patch.storyline = [];
         patch.cycle = fallback ? (state.flowsById[fallback.id]?.cycle ?? 0) : 0;
       }
       break;
@@ -364,6 +386,8 @@ export const useLoomStore = create<LoomState>((set, get) => ({
   logs: [],
   cycle: 0,
 
+  storyline: [],
+
   terminalData: {},
 
   selectedTerminalId: null,
@@ -375,9 +399,11 @@ export const useLoomStore = create<LoomState>((set, get) => ({
   zoom: 1,
   pan: { x: 0, y: 0 },
   railOpen: false,
+  storylineOpen: true,
   running: false,
 
   adding: false,
+  generating: false,
   draft: null,
   advOpen: false,
   typeQuery: "",
@@ -426,6 +452,7 @@ export const useLoomStore = create<LoomState>((set, get) => ({
         let working = get();
         let maxSeq = working.lastSeq;
         let activeTerm: string | null = null;
+        let storyline = working.storyline;
         const events = [...msg.events].sort((a, b) => a.seq - b.seq);
         for (const stored of events) {
           if (stored.seq <= working.lastSeq) continue; // already folded
@@ -439,6 +466,21 @@ export const useLoomStore = create<LoomState>((set, get) => ({
           }
           const patch = foldEvent(working, ev, stored.ts);
           working = { ...working, ...patch } as LoomState;
+          // Storyline: a pure projection of the same event stream.
+          const ctx: NarrationCtx = {
+            node: (id) => {
+              const fid = working.selectedFlowId;
+              const flow = fid ? working.flowsById[fid] : undefined;
+              const n = flow?.nodes.find((x) => x.id === id);
+              return n ? { title: n.title, type: n.type } : undefined;
+            },
+            runNode: (rid) => working.runNode[rid],
+          };
+          const nl = narrateEvent(ev, stored.seq, stored.ts, ctx);
+          if (nl) {
+            const stamped = nl.cycle === -1 ? { ...nl, cycle: working.cycle } : nl;
+            storyline = [...storyline, stamped].slice(-STORYLINE_MAX);
+          }
           if (stored.seq > maxSeq) maxSeq = stored.seq;
         }
         set({
@@ -452,6 +494,7 @@ export const useLoomStore = create<LoomState>((set, get) => ({
           logs: working.logs,
           cycle: working.cycle,
           running: working.running,
+          storyline,
           // selection can change when a flow is removed (flow.removed clears it).
           selectedFlowId: working.selectedFlowId,
           selectedNodeId: working.selectedNodeId,
@@ -481,11 +524,12 @@ export const useLoomStore = create<LoomState>((set, get) => ({
         break;
       }
       case "ack": {
-        if (!msg.ok) set({ lastError: msg.error ?? "command failed" });
+        // Any ack settles an in-flight generation (success or failure).
+        set({ generating: false, ...(!msg.ok ? { lastError: msg.error ?? "command failed" } : {}) });
         break;
       }
       case "error": {
-        set({ lastError: `${msg.code}: ${msg.message}` });
+        set({ generating: false, lastError: `${msg.code}: ${msg.message}` });
         break;
       }
     }
@@ -522,6 +566,12 @@ export const useLoomStore = create<LoomState>((set, get) => ({
   createFlow: (name) => {
     get().sendCommand({ t: "flow.create", cmdId: makeCmdId(), name });
   },
+  generateFlow: (prompt) => {
+    const text = prompt.trim();
+    if (!text) return;
+    set({ generating: true });
+    get().sendCommand({ t: "flow.generate", cmdId: makeCmdId(), prompt: text });
+  },
   deleteFlow: (flowId) => {
     const state = get();
     // Tell the engine to disarm/kill/archive + emit flow.removed (the authoritative
@@ -557,6 +607,7 @@ export const useLoomStore = create<LoomState>((set, get) => ({
       id: flow.id,
       name: flow.name,
       ...(flow.workDir !== undefined ? { workDir: flow.workDir } : {}),
+      ...(flow.reviewEachCycle !== undefined ? { reviewEachCycle: flow.reviewEachCycle } : {}),
       nodes: flow.nodes,
       edges: flow.edges,
     };
@@ -571,6 +622,20 @@ export const useLoomStore = create<LoomState>((set, get) => ({
     // optimistic local patch, then persist via spec.save (which carries workDir)
     const nextFlow = { ...flow, workDir: trimmed === "" ? undefined : trimmed };
     set({ flowsById: { ...flowsById, [selectedFlowId]: nextFlow } });
+    get().saveSpec();
+  },
+  continue: () => {
+    const { selectedFlowId, sendCommand } = get();
+    if (!selectedFlowId) return;
+    sendCommand({ t: "flow.continue", cmdId: makeCmdId(), flowId: selectedFlowId });
+  },
+  setReviewEachCycle: (on) => {
+    const { selectedFlowId, flowsById } = get();
+    if (!selectedFlowId) return;
+    const flow = flowsById[selectedFlowId];
+    if (!flow) return;
+    // optimistic local patch, then persist via spec.save (which carries the flag)
+    set({ flowsById: { ...flowsById, [selectedFlowId]: { ...flow, reviewEachCycle: on } } });
     get().saveSpec();
   },
   setTrigger: (nodeId, trigger) => {
@@ -610,9 +675,10 @@ export const useLoomStore = create<LoomState>((set, get) => ({
       selectedEdgeId: null,
       cycle: flow?.cycle ?? 0,
       running: flow ? flow.state === "rodando" : get().running,
-      // switching flows clears live overlays for the previous flow
+      // switching flows clears live overlays + narrative for the previous flow
       activeNodeIds: new Set<string>(),
       activeEdgeIds: new Set<string>(),
+      storyline: [],
     });
     // ask the engine to stream this flow (resume from our cursor)
     if (get().connection === "live") sendCommand({ t: "subscribe", flowId, sinceSeq: lastSeq });
@@ -626,6 +692,7 @@ export const useLoomStore = create<LoomState>((set, get) => ({
   setMode: (mode) => set({ mode, selectedEdgeId: null }),
   toggleTheme: () => set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
   setRailOpen: (open) => set({ railOpen: open }),
+  toggleStoryline: () => set((s) => ({ storylineOpen: !s.storylineOpen })),
   setZoom: (zoom) => set({ zoom: Math.max(0.4, Math.min(2.6, zoom)) }),
   zoomBy: (delta) => get().setZoom((get().zoom || 1) + delta),
   setPan: (pan) => set({ pan }),
@@ -775,6 +842,15 @@ export const selectSelectedEdge = (s: LoomState): Edge | null => {
 /** "none" | "node" | "edge" — drives which inspector panel renders. */
 export const selectInspectorKind = (s: LoomState): "none" | "node" | "edge" =>
   s.selectedEdgeId ? "edge" : s.selectedNodeId ? "node" : "none";
+
+export const selectStoryline = (s: LoomState): NarrationLine[] => s.storyline;
+
+/** A flow is "active" (will spend if left alone) when running, scheduled, or
+ *  awaiting a checkpoint. The play/stop button must offer STOP for ALL of these,
+ *  not just "rodando" — otherwise an armed interval flow can't be stopped. */
+export function isActiveFlowState(state?: FlowState): boolean {
+  return state === "rodando" || state === "agendado" || state === "aguardando";
+}
 
 export const selectIsNodeActive = (s: LoomState, nodeId: string): boolean => s.activeNodeIds.has(nodeId);
 export const selectIsEdgeActive = (s: LoomState, edgeId: string): boolean => s.activeEdgeIds.has(edgeId);

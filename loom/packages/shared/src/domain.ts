@@ -2,7 +2,7 @@ import type { FlowId, NodeId, EdgeId, RunId } from "./ids.js";
 import type { ModelId } from "./models.js";
 import type { NodeTypeName } from "./catalog.js";
 
-export type FlowState = "rodando" | "agendado" | "ocioso" | "pausado" | "rascunho";
+export type FlowState = "rodando" | "agendado" | "ocioso" | "pausado" | "rascunho" | "aguardando";
 export type RunMode = "run" | "edit";
 
 export type TriggerKind = "Agendado" | "Intervalo" | "Webhook" | "Manual";
@@ -44,11 +44,11 @@ export interface Edge {
 }
 
 export interface FlowBudget {
-  maxCyclesPerArm: number;        // hard cap on feedback re-arms within one trigger firing
-  maxTokensPerRun: number;
-  maxUsdPerRun: number;
-  maxTokensPerFlow: number;       // rolling per-flow ceiling (pre-spend admission)
-  maxUsdPerFlow: number;          // rolling per-flow ceiling (pre-spend admission)
+  maxCyclesPerArm: number;        // hard cap on feedback re-arms within one trigger firing (primary lifetime-cost bound in terminal mode)
+  maxTokensPerRun: number;        // per-run pre-spend cap (worstCaseRunTokens ≤ this); active in ALL modes (no metering needed)
+  maxUsdPerRun: number;           // per-run pre-spend cap (worstCaseRunCost ≤ this); active in ALL modes (no metering needed)
+  maxTokensPerFlow: number;       // rolling per-flow ceiling. NOTE: terminal mode has no live meter, so committed spend stays 0 and this only bounds concurrently-in-flight runs, NOT lifetime. See review_loom.md §7.1.
+  maxUsdPerFlow: number;          // rolling per-flow ceiling. Same caveat as maxTokensPerFlow: NOT a lifetime budget in terminal mode.
   maxConcurrentAgents: number;    // fan-out semaphore
   convergenceWindow: number;      // stop if N cycles produce no new artifact hash
 }
@@ -71,6 +71,9 @@ export interface Flow {
    * escape it) instead of the internal blackboardDir sandbox. Unset => sandbox.
    */
   workDir?: string;
+  /** When true, a feedback loop pauses into "aguardando" after each cycle and
+   *  waits for an explicit flow.continue before re-arming (human-in-the-loop). */
+  reviewEachCycle?: boolean;
 }
 
 export type RunStatus =

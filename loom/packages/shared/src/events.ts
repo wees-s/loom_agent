@@ -13,6 +13,7 @@ export type LoomEvent =
   | { type: "cycle.started"; flowId: FlowId; cycle: number; at: number }
   | { type: "cycle.ended"; flowId: FlowId; cycle: number; status: Cycle["status"]; totalUsd: number; at: number }
   | { type: "cycle.converged"; flowId: FlowId; cycle: number; reason: "no-new-output"; at: number }
+  | { type: "cycle.awaitingApproval"; flowId: FlowId; cycle: number; nextArm: number; at: number }
   | { type: "trigger.fired"; flowId: FlowId; nodeId: NodeId; cause: "Agendado" | "Intervalo" | "Webhook" | "Manual" | "feedback"; at: number }
   | { type: "run.started"; runId: RunId; flowId: FlowId; nodeId: NodeId; cycle: number; model: ModelId; at: number }
   | { type: "run.token"; runId: RunId; usage: TokenUsage; costUsd: number }

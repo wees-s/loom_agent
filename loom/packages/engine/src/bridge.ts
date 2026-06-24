@@ -23,6 +23,8 @@ import type { Scheduler } from "./scheduler.js";
 import type { Guard } from "./guard.js";
 import type { Terminals } from "./terminals.js";
 import type { Orchestrator } from "./orchestrator.js";
+import { hasScheduledTrigger } from "./orchestrator.js";
+import type { Generator } from "./generator.js";
 
 import {
   MODEL_CATALOG,
@@ -40,6 +42,8 @@ import type {
   NodeId,
   AgentNode,
   Edge,
+  EditableFlow,
+  GeneratedFlow,
 } from "@loom/shared";
 
 // =============================================================================
@@ -79,6 +83,37 @@ interface ClientState {
  * routes validated ClientCommands to spec/scheduler/guard/terminals/orchestrator,
  * live-tails eventlog + terminals.onData to subscribers, and acks every command.
  */
+/** Map a validated GeneratedFlow onto an EditableFlow for spec.save. Auto-grids
+ *  any missing node positions so the canvas lays them out left-to-right. */
+function generatedToEditable(gen: GeneratedFlow, id: FlowId): EditableFlow {
+  const nodes = gen.nodes.map((n, i) => ({
+    id: asNodeId(n.id),
+    type: n.type as AgentNode["type"],
+    title: n.title,
+    role: n.role,
+    model: (n.model ?? "claude-sonnet-4-6") as AgentNode["model"],
+    prompt: n.prompt,
+    linkedContexts: [] as string[],
+    position: n.position ?? { x: 120 + i * 240, y: 200 },
+    ...(n.produces ? { produces: n.produces } : {}),
+    ...(n.trigger ? { trigger: n.trigger } : {}),
+    ...(n.contextIsolation !== undefined ? { contextIsolation: n.contextIsolation } : {}),
+  }));
+  const edges = gen.edges.map((e, i) => ({
+    id: asEdgeId(`e_${i}`),
+    from: asNodeId(e.from),
+    to: asNodeId(e.to),
+    ...(e.feedback ? { feedback: e.feedback } : {}),
+  }));
+  return {
+    id,
+    name: gen.name,
+    nodes,
+    edges,
+    ...(gen.reviewEachCycle !== undefined ? { reviewEachCycle: gen.reviewEachCycle } : {}),
+  };
+}
+
 export function createBridge(
   eventlog: EventLog,
   spec: SpecStore,
@@ -86,6 +121,7 @@ export function createBridge(
   guard: Guard,
   terminals: Terminals,
   orchestrator: Orchestrator,
+  generator: Generator,
   emit: Emit,
 ): Bridge {
   // The ws server instance. Created eagerly; attached lazily via attach().
@@ -254,10 +290,14 @@ export function createBridge(
           guard.setFlowArmed(flowId, true);
           guard.setFlowPaused(flowId, false);
           scheduler.resumeFlow(flowId);
+          // A flow with an auto-firing trigger is now SCHEDULED (will keep
+          // firing) — surface that so the UI shows AGENDADO + a stop button,
+          // not a misleading "OCIOSO/parado".
+          const playedFlow = spec.get(flowId);
           emit({
             type: "flow.stateChanged",
             flowId,
-            state: "ocioso",
+            state: playedFlow && hasScheduledTrigger(playedFlow) ? "agendado" : "ocioso",
           });
           ack(ws, cmd.cmdId, true);
           break;
@@ -271,6 +311,7 @@ export function createBridge(
           guard.setFlowArmed(flowId, false);
           guard.setFlowPaused(flowId, true);
           scheduler.pauseFlow(flowId);
+          orchestrator.clearAwaiting(flowId);
           emit({
             type: "flow.stateChanged",
             flowId,
@@ -286,7 +327,50 @@ export function createBridge(
           // killFlow disarms the guard; also disarm the scheduler triggers.
           await guard.killFlow(flowId, "user");
           scheduler.pauseFlow(flowId);
+          orchestrator.clearAwaiting(flowId);
+          // Kill disarms the flow → project it as stopped (the kill path emitted
+          // no stateChanged before, leaving a stale "rodando"/"agendado").
+          emit({ type: "flow.stateChanged", flowId, state: "ocioso" });
           ack(ws, cmd.cmdId, true);
+          break;
+        }
+
+        // ----- flow.generate --------------------------------------------------
+        case "flow.generate": {
+          // NL authoring: a meta-agent (real) or a canned flow (fake) produces a
+          // validated GeneratedFlow, which we persist via the SAME validated path
+          // as a hand-built flow (spec.create + spec.save → acyclic + single-writer
+          // + ≥1 Trigger lint). Bounded one-shot cost; pre-flow, so no guard/budget.
+          const result = await generator.generate(cmd.prompt);
+          if (!result.ok) {
+            emit({ type: "log", flowId: asFlowId("—"), color: "rose", msg: `geração falhou: ${result.error}`, at: Date.now() });
+            ack(ws, cmd.cmdId, false, result.error);
+            break;
+          }
+          const created = await spec.create(result.flow.name);
+          const editable = generatedToEditable(result.flow, created.flow.id);
+          const saved = await spec.save(editable);
+          scheduler.armFlow(saved.flow.id); // dormant — safe by default
+          broadcastAll({ t: "flow.snapshot", flow: saved.flow });
+          ack(ws, cmd.cmdId, true);
+          break;
+        }
+
+        // ----- flow.continue --------------------------------------------------
+        case "flow.continue": {
+          const flowId = asFlowId(cmd.flowId);
+          // Human-in-the-loop: resume a flow paused at a cycle checkpoint. The
+          // orchestrator holds the already-admitted next arm; null means nothing
+          // was awaiting (e.g. after a restart lost the in-memory pending).
+          const resumed = await orchestrator.continueFlow(flowId);
+          if (resumed === null) {
+            // Unstick the projected state so the UI's "aguardando" doesn't linger
+            // with a dead Continue button, then report the no-op.
+            emit({ type: "flow.stateChanged", flowId, state: "ocioso" });
+            ack(ws, cmd.cmdId, false, "nada aguardando aprovação neste fluxo");
+          } else {
+            ack(ws, cmd.cmdId, true);
+          }
           break;
         }
 
@@ -327,6 +411,7 @@ export function createBridge(
           await guard.killFlow(flowId, "user");
           guard.setFlowArmed(flowId, false);
           scheduler.pauseFlow(flowId);
+          orchestrator.clearAwaiting(flowId);
           // 2. Archive the YAML (never hard-rm) + drop from the spec cache.
           const result = await spec.delete(flowId);
           // 3. Emit the removal so every client's projection drops the flow from

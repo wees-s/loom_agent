@@ -2,6 +2,7 @@ import { type CSSProperties } from "react";
 import type { LeftRailProps } from "../contracts";
 import type { FlowSummary, Terminal } from "@loom/shared";
 import { useLoomStore } from "../store";
+import { GenerateFlow } from "./GenerateFlow";
 
 /* ════════════════════════════════════════════════════════════════════════
  * LeftRail — collapsible glass rail.
@@ -261,6 +262,9 @@ function ExpandedRail({ flows, terminals, selectedFlowId, selectedTerminalId, on
           +
         </div>
       </div>
+
+      {/* Generate a flow from a natural-language description (slice C). */}
+      <GenerateFlow />
 
       {/* Flows list */}
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>

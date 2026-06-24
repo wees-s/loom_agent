@@ -1,0 +1,48 @@
+name: CI
+
+# Quality gates from the README ("all green"): typecheck → test → build across
+# the 3 project refs. Runs on every push and PR so regressions are caught before
+# merge (the project has no CI history yet — review_loom.md §7.5).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # corepack ships with Node and pins pnpm to the version in package.json
+      # ("packageManager": "pnpm@11.8.0"), so no separate pnpm install step.
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc # 22 — node:sqlite needs --experimental-sqlite (set below)
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (tsc -b across shared → engine → web)
+        run: pnpm -r typecheck
+
+      - name: Test (vitest)
+        # node:sqlite is behind an experimental flag at runtime; the engine's
+        # eventlog uses it, so the test runner needs it too.
+        env:
+          NODE_OPTIONS: --experimental-sqlite
+        run: pnpm -r test
+
+      - name: Build (shared → engine → web)
+        run: pnpm -r build

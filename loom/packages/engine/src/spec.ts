@@ -234,6 +234,7 @@ function specToFlow(spec: FlowSpec): Flow {
     budget: { ...spec.budget },
     blackboardDir: spec.blackboardDir,
     ...(spec.workDir !== undefined ? { workDir: spec.workDir } : {}),
+    ...(spec.reviewEachCycle !== undefined ? { reviewEachCycle: spec.reviewEachCycle } : {}),
   };
 }
 
@@ -302,6 +303,7 @@ function flowToSpecObject(flow: Flow): Record<string, unknown> {
     schedule: flow.schedule,
     blackboardDir: flow.blackboardDir,
     ...(flow.workDir !== undefined ? { workDir: flow.workDir } : {}),
+    ...(flow.reviewEachCycle !== undefined ? { reviewEachCycle: flow.reviewEachCycle } : {}),
     budget: { ...flow.budget },
     nodes: flow.nodes.map(nodeToPlain),
     edges: flow.edges.map(edgeToPlain),
@@ -495,6 +497,9 @@ export function createSpecStore(
     // YAML never carries a stale workDir after a user removes it.
     if (specObj.workDir !== undefined) doc.set("workDir", specObj.workDir);
     else doc.delete("workDir");
+    // reviewEachCycle: same optional set/delete pattern as workDir.
+    if (specObj.reviewEachCycle !== undefined) doc.set("reviewEachCycle", specObj.reviewEachCycle);
+    else doc.delete("reviewEachCycle");
     // budget/nodes/edges are wholesale-replaced (their internal structure is the
     // edit payload); top-level field comments are still preserved by the patch.
     doc.set("budget", specObj.budget);
@@ -503,7 +508,7 @@ export function createSpecStore(
 
     // Keep a stable, readable key order if this was a brand-new document.
     if (priorText === null && isMap(doc.contents)) {
-      const order = ["id", "name", "version", "schedule", "blackboardDir", "workDir", "budget", "nodes", "edges"];
+      const order = ["id", "name", "version", "schedule", "blackboardDir", "workDir", "reviewEachCycle", "budget", "nodes", "edges"];
       doc.contents.items.sort(
         (a, b) =>
           order.indexOf(String((a.key as { value?: unknown })?.value ?? a.key)) -
@@ -550,6 +555,9 @@ export function createSpecStore(
           : undefined
         : priorFlow?.workDir;
 
+    // reviewEachCycle: edit is authoritative; fall back to the prior flow's value.
+    const reviewEachCycle = edit.reviewEachCycle ?? priorFlow?.reviewEachCycle;
+
     const specObj: Record<string, unknown> = {
       id: edit.id,
       name: edit.name,
@@ -557,6 +565,7 @@ export function createSpecStore(
       schedule: priorFlow?.schedule ?? edit.name,
       blackboardDir: priorFlow?.blackboardDir ?? slugify(edit.name),
       ...(workDir !== undefined ? { workDir } : {}),
+      ...(reviewEachCycle !== undefined ? { reviewEachCycle } : {}),
       budget: priorFlow ? { ...priorFlow.budget } : { ...DEFAULT_BUDGET },
       nodes,
       edges,

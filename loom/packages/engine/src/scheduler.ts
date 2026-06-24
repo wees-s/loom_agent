@@ -233,12 +233,13 @@ export function createScheduler(
       log(arm.flowId, "#e0af68", `trigger ${String(arm.nodeId)} paused — skip ${cause}`);
       return;
     }
-    if (arm.firing || orchestrator.isRunning(arm.flowId)) {
-      // No-overlap + no-backfill: a still-running cycle swallows this fire.
+    if (arm.firing || orchestrator.isRunning(arm.flowId) || orchestrator.isAwaiting(arm.flowId)) {
+      // No-overlap + no-backfill: a still-running cycle — or one paused at a
+      // human-in-the-loop checkpoint (awaiting approval) — swallows this fire.
       log(
         arm.flowId,
         "#e0af68",
-        `${cause} fire dropped (cycle in flight) — no backfill`,
+        `${cause} fire dropped (cycle in flight or awaiting approval) — no backfill`,
       );
       return;
     }
